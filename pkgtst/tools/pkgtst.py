@@ -133,9 +133,6 @@ def main():
     # Create a subparser for the 'enumerate' command
     parser_enumerate = subparsers.add_parser('enumerate', help='Enumerate packages')
 
-    # Create a subparser for the 'render' command
-    parser_render = subparsers.add_parser('render', help='Render the Jinja template')
-
     # Create a subparser for the 'delete' command
     parser_delete = subparsers.add_parser('delete', help='Delete a specific version of a package')
     parser_delete.add_argument('package_id', type=str, help='Identifier of package to delete, separate hierarchy components with a colon')
@@ -199,15 +196,23 @@ def main():
         
         return 0
     
-    elif args.command == 'render':
-        x = ReportGen()
-        x.render_jinja()
-        return 0
     elif args.command == 'delete':
 
         filters = get_filters(args.package_id)
 
         fi = FileInt()
+        fi.delete(filters)
+        return 0
+    elif args.command == 'reset':
+        do_test(args.package_id, True)
+        return 0
+    else:
+        parser.print_help()
+        return 1
+
+if __name__ == '__main__':
+    main()
+FileInt()
         fi.delete(filters)
         return 0
     elif args.command == 'reset':
