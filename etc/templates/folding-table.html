@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<!-- hello there -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Jinja2 Table Example</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            margin-bottom: 40px;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            /* text-align: left; */
+        }
+        caption {
+            border: 1px solid black;
+            border-bottom: none; /* To avoid double border with the table */
+            padding: 8px;
+            /* text-align: center; */
+        }
+        tr:nth-child(even) {
+            background-color: #d3d3d3
+        }
+        tr:nth-child(odd) {
+            background-color: white;
+        }
+    </style>
+  </head>
+  <body>
+    <table>
+      <caption>Test Summary (Last Run: {{ summary['last_run'] }})</caption>
+      <thead>
+        <th>Test Name</th>
+        <th>Failed (Count)</th>
+        <th>Failed (Percentage)</th>
+      </thead>
+      <tbody>
+        <tr>
+          <td>File Integrity</td>
+          <td>{{ summary['fileint_fail_count'] }}</td>
+          <td>{{ "%.2f" | format(summary['fileint_fail_percentage']) }}</td>
+        </tr>
+        <tr>
+          <td>Missing Lib Scan</td>
+          <td>{{ summary['lnfs_fail_count'] }}</td>
+          <td>{{ "%.2f" | format(summary['lnfs_fail_percentage']) }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <table>
+      <caption>Test Results</caption>
+      <thead>
+        <tr>
+          <th>Datetime</th>
+          <th>Package Name</th>
+          <th>Package Version</th>
+          <th>Package Base</th>
+          <th>Modulefile</th>
+          <th>File Integrity</th>
+          <th>Library Check</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in data %}
+        <tr>
+          <td>{{ row.datetime }}</td>
+          <td>{{ row.package_name }}</td>
+          <td>{{ row.package_version }}</td>
+          <td>{{ row.package_base }}</td>
+          <td>
+            {% if row.module_name %}
+            {{ row.module_name }}
+            {% else %}
+            (None)
+            {% endif %}
+          </td>
+          {% if row.passed_fileint %}
+          <td style="background-color: green; color: white">
+            PASS
+          </td>
+          {% else %}
+          <td style="background-color: red; color: white">
+            FAIL
+          </td>
+          {% endif %}
+          {% if row.passed_lnfs %}
+          <td style="background-color: green; color: white">
+            PASS
+          </td>
+          {% else %}
+            {% if row.warn_only %}
+          <td style="background-color: yellow; color: black">
+            WARNING
+          </td>
+            {% else %}
+          <td style="background-color: red; color: white">
+            FAIL
+          </td>
+            {% endif %}
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </body>
+</html>

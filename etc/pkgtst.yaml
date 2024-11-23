@@ -1,0 +1,22 @@
+fileint:
+  dbfile: /path/to/my/fileint.sql
+  debug: true
+  debug_level: null
+  diff_hierarchy: true
+  follow_symlinks: true
+  format: sqlite3
+  hierarchy:
+  - package_name
+  - package_version
+  max_diff_prints: 10
+  no_duplicates: false
+  pool_size: 4
+general:
+  base:
+  - /packages
+  hierarchy: '{package_name}/{package_version}'
+  path_limit: /packages
+  email: noreply@example.com
+report_gen:
+  dbfile: /path/to/my/results.sql
+  rendered_html: /path/to/my/results.html
