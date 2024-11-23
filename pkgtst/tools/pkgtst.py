@@ -212,15 +212,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-FileInt()
-        fi.delete(filters)
-        return 0
-    elif args.command == 'reset':
-        do_test(args.package_id, True)
-        return 0
-    else:
-        parser.print_help()
-        return 1
-
-if __name__ == '__main__':
-    main()
