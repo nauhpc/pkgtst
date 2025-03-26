@@ -32,6 +32,11 @@ python3 -m venv ./pkgtst-env
 pip install .
 ```
 
+    3.b. (Optional) Use the `post-install` script to set paths in the configuration file to be subdirectories of the base repo and create expected directories:
+    ```
+    ./post-install
+    ```
+
 4. Review the default configuration in `./etc/pkgtst.yaml`
 
     The most important parts are the `[general][base]` and `[general][hierarchy]` settings. The former should point to the base of a package tree. We set this to be the base of our package tree for our loadable [Lmod](https://github.com/TACC/Lmod) modules. The latter setting should match your file system hierarchy. Once you have this set to your liking move on to the next step.

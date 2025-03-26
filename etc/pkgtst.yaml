@@ -11,12 +11,21 @@ fileint:
   max_diff_prints: 10
   no_duplicates: false
   pool_size: 4
+  array_task_throttle: 16
 general:
   base:
   - /packages
   hierarchy: '{package_name}/{package_version}'
+  ignore_paths: null
   path_limit: /packages
   email: noreply@example.com
 report_gen:
   dbfile: /path/to/my/results.sql
   rendered_html: /path/to/my/results.html
+  retention: 100 runs
+  output_limit_per: 5
+  warn_only: null
+custom_test:
+  script_dir: /path/to/my/custom_tests
+  output_dir: /path/to/my/custom_tests/output
+  results_dir: /path/to/my/custom_tests/results

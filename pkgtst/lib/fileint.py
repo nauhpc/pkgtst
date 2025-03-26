@@ -14,6 +14,9 @@ import multiprocessing
 import fcntl
 import re
 
+from pkgtst.lib.logger import Logger
+from pkgtst.lib.logger import LogLevel
+
 class MismatchType(enum.Enum):
     MISSING_ROW = 1
     EXTRA_ROW = 2
@@ -31,15 +34,17 @@ def dict_factory(cursor, row):
 # Used for the package directory hierarchy
 class Hierarchy:
     
-    def __init__(self, hierarchy_string=None):
+    def __init__(self, hierarchy_string=None, config_path=None):
 
         self.depth = 0               # how many directories make up the hierarchy
         self.pattern = None          # a regex pattern
         self.components = []         # named fields within the hierarchy
 
         if hierarchy_string is None:
+
+            if config_path is None or not isinstance(config_path, str):
         
-            config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'pkgtst.yaml')
+                config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'pkgtst.yaml')
 
             if not os.path.exists(config_path):
                 raise Exception(f'ERROR: Configuration file does not exist at {config_path}')
@@ -138,6 +143,8 @@ class FileInt:
 
         self.path_limit = self.config['general']['path_limit']
 
+        self.logger = Logger(config_path=config)
+
     def create_db(self):
         self.conn = sqlite3.connect(self.dbfile)
         self.cursor = self.conn.cursor()
@@ -168,7 +175,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
         self.cursor.close()
         self.conn.close()
 
-        print(f"created database at {self.dbfile}")
+        self.logger.log(LogLevel.INFO, f"created database at {self.dbfile}")
 
     def db_connect(self):
         if not os.path.exists(self.dbfile):
@@ -182,12 +189,12 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
                     if not os.path.exists(self.dbfile):
                         self.create_db()
                     else:
-                        print(f"Database '{self.dbfile}' already exists.")
+                        self.logger.log(LogLevel.INFO, f"Database '{self.dbfile}' already exists.")
                 finally:
                     # Release the lock
                     fcntl.flock(f, fcntl.LOCK_UN)
         else:
-            print(f"Database '{self.dbfile}' already exists.")
+            self.logger.log(LogLevel.INFO, f"Database '{self.dbfile}' already exists.")
         
         # Connect to the SQLite database
         self.conn = sqlite3.connect(self.dbfile)
@@ -203,7 +210,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
                     for block in iter(lambda: f.read(block_size), b''):
                         sha256.update(block)
             except PermissionError as e:
-                sys.stderr.write(f"ERROR: could not obtain hash for file {filename} -- {e}\n")
+                self.logger.log(LogLevel.WARNING, f"caught exception, could not obtain hash for file {filename} -- {e}")
             return sha256.hexdigest()
         else:
             return ""
@@ -313,7 +320,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
     def signal_handler(self, signum, frame):
         signame = signal.Signals(signum).name
         if self.invalidated:
-            sys.stderr.write(f"WARNING: Encountered {signame}, committing changes\n")
+            self.logger.log(LogLevel.WARNING, f"Encountered {signame}, committing changes")
             self.conn.commit()
             self.invalidated = False
             sys.exit(1)
@@ -375,7 +382,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
                             break
                         fi_query += " AND "
                         filters_i += 1
-                    # print(f"fi_query: {fi_query}")
+                    self.logger.log(LogLevel.TRACE, f"fi_query: {fi_query}")
                     self.cursor.execute(fi_query)
 
                 base_path_set = set()
@@ -398,8 +405,8 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
                             f_query += ")"
                             break
                         f_query += ", "
-                    # print(f"f_query = {f_query}")
-                    # print(f"filters = {filters}")
+                    self.logger.log(LogLevel.TRACE, f"f_query = {f_query}")
+                    self.logger.log(LogLevel.TRACE, f"filters = {filters}")
                     self.cursor.execute(f_query)
                 # row in this case is a sqlite3.Row object
                 for row in self.cursor.fetchall():
@@ -417,7 +424,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
 
     def write_tbls(self, fileint_tbl, file_tbl):
         if self.dbformat == 'pickle':
-            sys.stderr.write(f"INFO: {self.dbfile} does not exist, writing baseline\n")
+            self.logger.log(LogLevel.INFO, f"{self.dbfile} does not exist, writing baseline")
             with open(self.dbfile, 'wb') as pkl_file:
                 pickle.dump([fileint_tbl, file_tbl], pkl_file)
         elif self.dbformat == 'sqlite3':
@@ -425,26 +432,21 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
         else:
             raise Exception(f"ERROR: unexpected database format {self.dbformat}!")
 
-    def print_debug(self, line):
-        if self.debug:
-            sys.stderr.write(f"{line}\n")
-
     def print_diffs(self, diffs, header):
-        if self.debug:
-            self.print_debug(f"{header} - START")
-            if len(diffs):
-                limit = len(diffs)
-                if self.max_diff_prints:
-                    limit = self.max_diff_prints
-                for i in range(len(diffs)):
-                    if i >= limit:
-                        self.print_debug("INFO: diff print limit exceeded")
-                        break
-                    self.print_debug(f"diff #{i} {'mismatch_type'}: {diffs[i]['mismatch_type']}")
-                    for key in diffs[i]:
-                        if key != 'mismatch_type':
-                            self.print_debug(f"diff #{i} - {key}: {diffs[i][key]}")
-            self.print_debug(f"{header} - END")
+        self.logger.log(LogLevel.VERBOSE, f"{header} - START")
+        if len(diffs):
+            limit = len(diffs)
+            if self.max_diff_prints:
+                limit = self.max_diff_prints
+            for i in range(len(diffs)):
+                if i >= limit:
+                    self.logger.log(LogLevel.VERBOSE, "diff print limit exceeded")
+                    break
+                self.logger.log(LogLevel.VERBOSE, f"diff #{i} {'mismatch_type'}: {diffs[i]['mismatch_type']}")
+                for key in diffs[i]:
+                    if key != 'mismatch_type':
+                        self.logger.log(LogLevel.VERBOSE, f"diff #{i} - {key}: {diffs[i][key]}")
+        self.logger.log(LogLevel.VERBOSE, f"{header} - END")
 
     def process_file(self, filepath):
         base_path = self.base_path
@@ -490,35 +492,26 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
         get_bps_query += " AND ".join(conditions)
 
         self.db_connect()
-        if self.debug:
-            sys.stderr.write(f"get_bps_query = {get_bps_query}\n")
+        self.logger.log(LogLevel.VERBOSE, f"get_bps_query = {get_bps_query}")
         data = self.cursor.execute(get_bps_query).fetchall()
         base_paths = set([row[0] for row in data])
         if len(base_paths) == 0:
-            if self.debug:
-                sys.stderr.write(f"INFO: In FileInt::delete(), no matching entries found in fileint, nothing to do\n")
+            self.logger.log(LogLevel.VERBOSE, f"INFO: In FileInt::delete(), no matching entries found in fileint, nothing to do")
             return
 
         # STEP 2: remove file row(s) containing any of those base_path value(s)
         file_rm_query = "DELETE FROM file WHERE " + " OR ".join([f"base_path = \"{base_path}\"" for base_path in base_paths])
-        if self.debug:
-            sys.stderr.write(f"file_rm_query = {file_rm_query}\n")
+        self.logger.log(LogLevel.VERBOSE, f"file_rm_query = {file_rm_query}")
         self.cursor.execute(file_rm_query)
 
         # STEP3 3: remove fileint row(s) based on specified filter(s)
         fileint_rm_query = "DELETE FROM fileint WHERE " + " AND ".join(conditions)
-        if self.debug:
-            sys.stderr.write(f"fileint_rm_query = {fileint_rm_query}\n")
+        self.logger.log(LogLevel.VERBOSE, f"fileint_rm_query = {fileint_rm_query}")
         self.cursor.execute(fileint_rm_query)
 
         self.db_save()
 
     def read_paths(self, filters=None, accept=False):
-
-        if self.debug:
-            sys.stderr.write("INFO: DEBUG ON\n")
-        else:
-            sys.stderr.write("INFO: DEBUG OFF\n")
 
         # used to avoid symlink duplicates for now, unconditionally, not heeding
         # the config parameter yet
@@ -532,12 +525,16 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
         file_tbl = dict()
 
         for search_path in self.config['general']['base']:
-            for fpath in pathlib.Path(search_path).glob("*/*"):
+            if h == 1:
+                files = pathlib.Path(search_path).iterdir()
+            else:
+                files = pathlib.Path(search_path).glob("/".join(h * ["*"]))
+            for fpath in files:
                 metadata = []
                 fpath = str(pathlib.Path(fpath))
                 # # using resolve here means that if two packages point to eachother, there will only be one entry
                 # # not doing so, means that they are treated like entirely unique directories
-                # fpath = str(pathlib.Path(fpath).resolve())
+                fpath = str(pathlib.Path(fpath).resolve())
                 d1, d2 = fpath.split('/')[-2:]
                 if d1 == 'modulefiles' or \
                    d2 == 'modulefiles' or \
@@ -546,7 +543,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
                 if (fpath not in self.config['general']['base']) and (fpath not in seen_paths):
                     seen_paths.add(fpath)
                     if filters is None:
-                        self.print_debug(f"new package {fpath}")
+                        self.logger.log(LogLevel.INFO, f"new package {fpath}")
                     if self.config['fileint']['hierarchy'] is not None and len(self.config['fileint']['hierarchy']) > 0:
                         base_path = fpath
 
@@ -572,7 +569,10 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
 
                     self.base_path = base_path
 
-                    pkg_path = pathlib.Path(self.path_limit)
+                    if self.path_limit is not None:
+                        pkg_path = pathlib.Path(self.path_limit)
+                    else:
+                        pkg_path = '\0'
 
                     with multiprocessing.Pool(self.pool_size) as p:
                         
@@ -587,9 +587,11 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
                         for (key, new_row) in results:
                             file_tbl[key] = new_row
                             metadata.append(list(new_row.values()))
-                        
-                metadata_hash = self.sha256_checksum_metadata(metadata)
-                fileint_tbl[base_path]['hash_of_blob'] = metadata_hash
+
+                    # IMPORTANT, CHECK LOGIC, IS THIS INDENTATION RIGHT?
+                    # IT WAS PREVIOUSLY UP/LEFT BY 1 INDENTATION LEVEL
+                    metadata_hash = self.sha256_checksum_metadata(metadata)
+                    fileint_tbl[base_path]['hash_of_blob'] = metadata_hash
                 
         if not os.path.exists(self.dbfile) or not self.filters_matched(filters):
             self.write_tbls(fileint_tbl, file_tbl)
@@ -601,7 +603,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
             file_tbl_diffs = None
         else:
 
-            sys.stderr.write(f"INFO: {self.dbfile} does exist, comparing with baseline\n")
+            self.logger.log(LogLevel.INFO, f"{self.dbfile} does exist, comparing with baseline")
             prev_fileint_tbl, prev_file_tbl = self.read_saved_tbls(filters)
 
             fileint_tbl_diffs = self.tbl_compare(prev_fileint_tbl, fileint_tbl)
@@ -612,7 +614,6 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
 
             file_set = set([diff['row'] for diff in file_tbl_diffs])
 
-            print()
             print("==== RESULTS ====")
 
             if len(fileint_tbl_diffs) == 0:
@@ -631,7 +632,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
 
     def del_db(self):
         if os.path.exists(self.dbfile):
-            print(f"removing previous db: {self.dbfile}")
+            self.logger.log(LogLevel.INFO, f"removing previous db: {self.dbfile}")
             os.remove(self.dbfile)
 
     # iterates through pre-configured paths, prints all paths that match the
@@ -650,9 +651,14 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
         seen_paths = set()
 
         for search_path in self.config['general']['base']:
-            for fpath in pathlib.Path(search_path).glob("*/*"):
+            if h == 1:
+                files = pathlib.Path(search_path).iterdir()
+            else:
+                files = pathlib.Path(search_path).glob("/".join(h * ["*"]))
+            for fpath in files:
                 metadata = []
                 fpath = str(pathlib.Path(fpath))
+                # print(f"fpath: {fpath}")
                 # # using resolve here means that if two packages point to eachother, there will only be one entry
                 # # not doing so, means that they are treated like entirely unique directories
                 # fpath = str(pathlib.Path(fpath).resolve())
@@ -663,7 +669,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
                     continue
                 if (fpath not in self.config['general']['base']) and (fpath not in seen_paths):
                     seen_paths.add(fpath)
-                    # self.print_debug(f"new package {fpath}")
+                    self.logger.log(LogLevel.TRACE, f"new package {fpath}")
                     if self.config['fileint']['hierarchy'] is not None and len(self.config['fileint']['hierarchy']) > 0:
 
                         base_path = fpath

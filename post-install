@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+
+import os
+import yaml
+import sys
+
+if __name__ == '__main__':
+
+    
+    own_path = os.path.abspath(__file__)
+    base_dir = os.path.dirname(own_path)
+    config_path = os.path.join(base_dir, 'etc', 'pkgtst.yaml')
+    print(f"base_dir: {base_dir}")
+
+    var_path = os.path.join(base_dir, 'var')
+    var_db_path = os.path.join(var_path, 'db')
+    var_html_path = os.path.join(var_path, 'html')
+
+    os.makedirs(var_db_path, exist_ok=True)
+    os.makedirs(var_html_path, exist_ok=True)
+
+    sys.stdout.write(f"Created directories: {var_db_path}, {var_html_path}\n")
+    
+    fp = open(config_path, "r")
+    config_data = yaml.safe_load(fp)
+    
+    config_data['fileint']['dbfile'] = os.path.join(base_dir, "var", "db", "fileint.sql")
+    config_data['report_gen']['dbfile'] = os.path.join(base_dir, "var", "db", "results.sql")
+    config_data['report_gen']['rendered_html'] = os.path.join(base_dir, "reports", "results.html")
+    config_data['custom_test']['script_dir'] = os.path.join(base_dir, "var", "custom_test")
+    config_data['custom_test']['output_dir'] = os.path.join(base_dir, "var", "custom_test", "output")
+    config_data['custom_test']['results_dir'] = os.path.join(base_dir, "var", "custom_test", "results")
+
+
+    with open(config_path, "w") as fp:
+        yaml.dump(config_data, fp, default_flow_style=False)
+
+    sys.stdout.write(f"Set paths in {config_path}\n")

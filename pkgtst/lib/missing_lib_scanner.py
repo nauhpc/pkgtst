@@ -6,6 +6,8 @@ import re
 from multiprocessing import Pool
 import sys
 
+from pkgtst.lib.logger import Logger
+from pkgtst.lib.logger import LogLevel
 
 class MissingLibScanner:
 

@@ -1,0 +1,219 @@
+#!/bin/bash
+
+function usage() {
+    IFS= read -rd '' SCRIPT_NAME < <(basename -z -- "${BASH_SOURCE[0]}")
+    printf '%b\n' "\e[1mNAME\e[0m
+    $SCRIPT_NAME
+
+DESCRIPTION
+   Use this script to install (or update) pkgtst from the main github repo. Optionally, specify the path to existing config and db files.
+
+\e[1mOPTIONS\e[0m
+    -h, --help        print this help message
+
+    -c FILE, --config-file=FILE
+                      path to site's pkgtst.yaml file
+
+    -d DB_FILES, --db-files=DB_FILES
+                      colon-separeted list of db file backups to copy into var/db
+
+    -f CT_YAML_FILES, --ct-yaml-files=CT_YAML_FILES
+                      colon-separated list of custom test YAML configuration files to copy into var/custom_tests
+
+    -D DIRECTORY, --chdir=DIRECTORY
+                      this directory will serve as the base dir (the base will
+                      be <cwd>/pkgtst otherwise)
+
+    -v VERSION, --version=VERSION
+                      version of pkgtst to install (tag or branch name)
+
+    -r REPO_URL, --repo-url=REPO_URL
+                      github repo address (default:
+                      https://github.com/nauhpc/pkgtst)
+
+    -u, --update      update project in place to latest commit of the specified
+                      repo"
+}
+
+function die() {
+    local msg="$1"
+    local -i exit="$2"
+    printf 'ERROR: %s\n' "$msg" 1>&2
+    exit "$exit"
+}
+
+function git_sync_all() {
+    git branch -r \
+        | grep -v '\->' \
+        | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g" \
+        | while IFS= read -r remote; do \
+            git branch --track "${remote#origin/}" "$remote"; \
+          done
+    git fetch --all
+    git pull --all
+}
+
+
+CONFIG_FILE=
+declare -a DB_FILES
+BASE_DIR=
+VERSION=
+REPO_URL='https://github.com/nauhpc/pkgtst.git'
+UPDATE=0
+
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -c|--config-file=*)
+            if [[ "$1" == -c ]]; then
+                shift
+                CONFIG_FILE="$1"
+            else
+                CONFIG_FILE="${1##*=}"
+            fi
+            if ! [[ -f "$CONFIG_FILE" ]]; then
+                die "ERROR: no such file ${CONFIG_FILE@Q}" 1
+            fi
+            ;;
+        -d|--db-files=*)
+            if [[ "$1" == -d ]]; then
+                shift
+                i="$1"
+            else
+                i="${1##*=}"
+            fi
+            IFS=: read -ra DB_FILES <<< "$i"
+            for file in "${DB_FILES[@]}"; do
+                if ! [[ -f "$file" ]]; then
+                    die "ERROR: no such file ${file@Q}" 2
+                fi
+            done
+            ;;
+        -f|--ct-yaml-files=*)
+            if [[ "$1" == -f ]]; then
+                shift
+                i="$1"
+            else
+                i="${1##*=}"
+            fi
+            IFS=: read -ra CT_YAML_FILES <<< "$i"
+            for file in "${CT_YAML_FILES[@]}"; do
+                if ! [[ -f "$file" ]]; then
+                    die "ERROR: no such file ${file@Q}" 2
+                fi
+            done
+            ;;
+        -D|--chdir=*)
+            if [[ "$1" == -D ]]; then
+                shift
+                BASE_DIR="$1"
+            else
+                BASE_DIR="${1##*=}"
+            fi
+            ;;
+        -v|--version=*)
+            if [[ "$1" == -v ]]; then
+                shift
+                VERSION="$1"
+            else
+                VERSION="${1##*=}"
+            fi
+            printf '%s\n' 'INFO: version setting ignored, not yet implemented' 1>&2
+            ;;
+        -r|--repo-url=*)
+            if [[ "$1" == -r ]]; then
+                shift
+                REPO_URL="$1"
+            else
+                REPO_URL="${1##*=}"
+            fi
+            ;;
+        -u|--update)
+            UPDATE=1
+            ;;
+        *)
+            die "unrecognized argument
+
+$(usage)" 16
+            ;;
+    esac
+    shift
+done
+
+if [[ "${BASE_DIR:+X}" ]]; then
+    # PKGTST_CHDIR - we will chdir here before doing the clone
+    IFS= read -rd '' PKGTST_CHDIR < <(dirname -z -- "$BASE_DIR")
+    cd -- "$PKGTST_CHDIR" || \
+        die "ERROR: could not cd into ${PKGTST_CHDIR@Q} in order to do the git clone, does it exist?" 3
+else
+    BASE_DIR="$(pwd)/pkgtst" || \
+        die "ERROR: well, this is embarassing, pwd failed (exit code: $?)" 4
+fi
+
+# REPO_DST is the destination for our git clone
+IFS= read -rd '' REPO_DST < <(basename -z -- "$BASE_DIR")
+printf '%s\n' "REPO_DST: ${REPO_DST@Q}"
+
+if [[ "$UPDATE" != 1 ]]; then
+
+    git clone "$REPO_URL" "$REPO_DST" || \
+        die "ERROR: git clone failed" 5
+    cd -- "$REPO_DST" || \
+        die "ERROR: unable to cd into ${REPO_DST@Q}, the git clone may have failed" 7
+    git_sync_all
+    git checkout "$VERSION" || die "ERROR: git checkout for ${VERSION@Q} failed" 8
+    printf '%s\n' "INFO: cd'ing into ${REPO_DST@Q}" 1>&2
+
+    mkdir -vp ./etc ./var/db ./reports
+
+    set -x
+    if [[ "${CONFIG_FILE:+X}" ]]; then
+        cp -v -- "$CONFIG_FILE" ./etc/
+    fi
+
+    for i in "${DB_FILES[@]}"; do
+        cp -v "$i" ./var/db/
+    done
+
+    for i in "${CT_YAML_FILES[@]}"; do
+        cp -v "$i" ./var/custom_tests/
+    done
+    
+    set +x
+
+    python3 -m venv p-env || die "failed to create python venv" 9
+    # shellcheck disable=SC1091
+    . ./p-env/bin/activate || die "failed to activate python venv" 10
+    pip install --upgrade pip || die "failed to update pip" 11
+    pip install . || die "failed to install pkgtst python package" 12
+
+    PYCODE='import os
+import yaml
+
+if __name__ == "__main__":
+    own_path = os.path.abspath(__file__)
+    base_dir = os.path.dirname(own_path)
+    config_path = os.path.join(base_dir, "etc", "pkgtst.yaml")
+    print(f"base_dir: {base_dir}")
+    fp = open(config_path, "r")
+    config_data = yaml.safe_load(fp)
+    
+    config_data["fileint"]["dbfile"] = os.path.join(base_dir, "var", "db", "fileint.sql")
+    config_data["report_gen"]["dbfile"] = os.path.join(base_dir, "var", "db", "results.sql")
+    config_data["report_gen"]["rendered_html"] = os.path.join(base_dir, "reports", "results.html")
+
+    with open(config_path, "w") as fp:
+        yaml.dump(config_data, fp, default_flow_style=False)'
+    printf '%s\n' "INFO: setting default paths in $(pwd)/etc/pkgtst.yaml" 1>&2
+    python3 <<< "$PYCODE" || die 'failed to set defaults in ./etc/pkgtst.yaml' 13
+
+else
+    git fetch origin || die 'git fetch failed' 14
+    # shellcheck disable=SC1091
+    . ./p-env/bin/activate || die "failed to activate python venv" 15
+    pip install --upgrade pip || die "failed to update pip" 16
+    pip install . || die "failed to install pkgtst python package" 17
+fi

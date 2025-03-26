@@ -8,18 +8,28 @@ import sqlite3
 import fcntl
 import yaml
 import sys
-from .fileint import Hierarchy
+import shutil
+
+from pkgtst.lib.logger import Logger
+from pkgtst.lib.logger import LogLevel
+
+from pkgtst.lib.fileint import Hierarchy
+
+from pkgtst.lib.custom_test import CustomTest
 
 class ReportGen():
 
-    def __init__(self):
+    def __init__(self, config_path=None):
         self.template_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'templates')
         self.tbl_template_basename = 'template.html'
 
         self.dbfile = os.path.join(os.path.dirname(__file__), '..', '..', 'var', 'db', 'results.sql')
         self.rendered_html = os.path.join(os.path.dirname(__file__), '..', '..', 'var', 'html', 'test_results.html')
 
-        self.config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'pkgtst.yaml')
+        if config_path is None:
+            self.config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'pkgtst.yaml')
+        else:
+            self.config_path = config_path
         if os.path.exists(self.config_path):
             with open(self.config_path, 'r') as f:
                 self.config = yaml.safe_load(f)
@@ -29,8 +39,19 @@ class ReportGen():
                     self.rendered_html = self.config['report_gen']['rendered_html']
                 if self.config['report_gen']['warn_only']:
                     self.warn_only = self.config['report_gen']['warn_only']
+                else:
+                    self.warn_only = []
+                if self.config['report_gen']['ct_warn_only']:
+                    self.ct_warn_only = self.config['report_gen']['ct_warn_only']
+                else:
+                    self.ct_warn_only = []
+                if self.config['report_gen']['retention']:
+                    self.retention = self.config['report_gen']['retention']
+                if self.config['report_gen']['output_limit_per']:
+                    # the output limit per package
+                    self.output_limit_per = self.config['report_gen']['output_limit_per']
 
-        self.hierarchy = Hierarchy()
+        self.hierarchy = Hierarchy(config_path=self.config_path)
         self.column_string = ""
         self.column_create_string = ""
         for i in range(len(self.hierarchy.components)):
@@ -44,6 +65,15 @@ class ReportGen():
             self.column_create_string += f"{component} TEXT NOT NULL,"
             if i < len(self.hierarchy.components) - 1:
                 self.column_create_string += "\n"
+
+        # env var overrides
+        if os.environ.get('PKGTST_RETENTION'):
+            self.retention = os.environ.get('PKGTST_RETENTION')
+
+        if os.environ.get('PKGTST_OUTPUT_LIMIT_PER'):
+            self.output_limit_per = os.environ.get('PKGTST_OUTPUT_LIMIT_PER')
+
+        self.logger = Logger(config_path=self.config_path)
 
     def create_db(self):
         conn = sqlite3.connect(self.dbfile)
@@ -60,7 +90,7 @@ CREATE TABLE IF NOT EXISTS results (
 )
 ''' % (self.column_create_string)
 
-        print(f"query: {query}")
+        self.logger.log(LogLevel.VERBOSE, f"query: {query}")
         cursor.execute(query)
 
         conn.commit()
@@ -68,7 +98,7 @@ CREATE TABLE IF NOT EXISTS results (
         cursor.close()
         conn.close()
 
-        print(f"created database at {self.dbfile}")
+        self.logger.log(LogLevel.INFO, f"created database at {self.dbfile}")
 
     def create_db_with_lock(self):
         lock_file = self.dbfile + '.lock'
@@ -81,10 +111,71 @@ CREATE TABLE IF NOT EXISTS results (
                 if not os.path.exists(self.dbfile):
                     self.create_db()
                 else:
-                    print(f"Database '{self.dbfile}' already exists.")
+                    self.logger.log(LogLevel.INFO, f"Database '{self.dbfile}' already exists.")
             finally:
                 # Release the lock
                 fcntl.flock(f, fcntl.LOCK_UN)
+
+    def trim_results(self, package_id):
+        self.logger.log(LogLevel.INFO, f"INFO: self.retention: {self.retention}")
+        
+        if len(package_id) != len(self.hierarchy.components):
+            # retention rules only apply to individual packages
+            return
+
+        if self.retention is None:
+            return
+
+        n, units = self.retention.split(" ")
+
+        try:
+            n = int(n)
+        except:
+            raise Exception(f"ERROR: unable to parse n as an integer from retention value (value: {self.retention}, should read as '<n> <units>')")
+
+        if units not in {'runs', 'days', 'weeks', 'months', 'years'}:
+            raise Exception(f"ERROR: invalid units in retention value (value: {self.retention}, should read as '<n> <units>')")
+
+        conn = sqlite3.connect(self.dbfile)
+        cursor = conn.cursor()
+
+        if units == 'runs':
+            query = """
+DELETE FROM results WHERE ROWID IN (
+    SELECT ROWID
+    FROM results
+    WHERE %s
+    ORDER BY datetime ASC
+    LIMIT -1 OFFSET %s
+);""" % (" AND ".join([f"{component} = ?" for component in self.hierarchy.components]), n)
+            values = package_id
+        else:
+            if units == 'days':
+                scalar = 1
+            elif units == 'weeks':
+                scalar = 7
+            elif units == 'months':
+                scalar = 30
+            elif units == 'years':
+                scalar = 365
+            days = n * scalar
+            mydate = datetime.datetime.now() - datetime.timedelta(days=days)
+            timestamp = mydate.strftime('%Y-%m-%d 00:00:00')
+            self.logger.log(LogLevel.TRACE, f"days = {days}, timestamp = '{timestamp}'")
+            query = "DELETE FROM results WHERE datetime < ?"
+            values = [timestamp]
+            self.logger.log(LogLevel.TRACE, f"query = {query}")
+
+        self.logger.log(LogLevel.TRACE, f"query: '{query}', values: '{values}'")
+
+        cursor.execute(query, values)
+
+        self.logger.log(LogLevel.INFO, 'The results database may have been changed (operation: trim), consider updating the results page (i.e. by executing pkgtst report --render-jinja')
+
+        conn.commit()
+
+        cursor.close()
+        conn.close()
 
     def write_result(self, package_id, pkg_base, module_name, results):
 
@@ -104,6 +195,8 @@ CREATE TABLE IF NOT EXISTS results (
         query = '''INSERT INTO results (datetime, %s, package_base, module_name, passed_fileint, passed_lnfs)
 VALUES (%s)''' % (self.column_string, ", ".join("?" * len(values)))
 
+        self.logger.log(LogLevel.INFO, 'The results database has been changed (operation: insert), consider updating the results page (i.e. by executing pkgtst report --render-jinja')
+
         # edits
         cursor.execute(query, values)
         
@@ -112,7 +205,149 @@ VALUES (%s)''' % (self.column_string, ", ".join("?" * len(values)))
         cursor.close()
         conn.close()
 
-    def pprint_table_helper(self, data):
+        self.trim_results(package_id)
+
+    def create_ct_tbl(self):
+        conn = sqlite3.connect(self.dbfile)
+        cursor = conn.cursor()
+
+        query = '''
+CREATE TABLE IF NOT EXISTS ct_results (
+    datetime TEXT NOT NULL,
+    test_name TEXT NOT NULL,
+    variant TXT NOT NULL,
+    passed BOOLEAN NOT NULL CHECK (passed IN (0, 1))
+)
+'''
+
+        self.logger.log(LogLevel.VERBOSE, f"query: {query}")
+        cursor.execute(query)
+
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+    def trim_ct_results(self, test_name):
+        self.logger.log(LogLevel.INFO, f"self.retention: {self.retention}")
+
+        if test_name is None or not isinstance(test_name, str):
+            self.logger.log(LogLevel.ERROR, "test_name is not a string")
+
+        if self.retention is None:
+            return
+
+        n, units = self.retention.split(" ")
+
+        try:
+            n = int(n)
+        except:
+            raise Exception(f"ERROR: unable to parse n as an integer from retention value (value: {self.retention}, should read as '<n> <units>')")
+
+        if units not in {'runs', 'days', 'weeks', 'months', 'years'}:
+            raise Exception(f"ERROR: invalid units in retention value (value: {self.retention}, should read as '<n> <units>')")
+
+        conn = sqlite3.connect(self.dbfile)
+        cursor = conn.cursor()
+
+        if units == 'runs':
+            query = """
+DELETE FROM ct_results WHERE ROWID IN (
+    SELECT ROWID
+    FROM ct_results
+    WHERE test_name = ?
+    ORDER BY datetime ASC
+    LIMIT -1 OFFSET ?
+);"""
+            values = [test_name, n]
+        else:
+            if units == 'days':
+                scalar = 1
+            elif units == 'weeks':
+                scalar = 7
+            elif units == 'months':
+                scalar = 30
+            elif units == 'years':
+                scalar = 365
+            days = n * scalar
+            mydate = datetime.datetime.now() - datetime.timedelta(days=days)
+            timestamp = mydate.strftime('%Y-%m-%d 00:00:00')
+            self.logger.log(LogLevel.TRACE, f"days = {days}, timestamp = '{timestamp}'")
+            query = "DELETE FROM ct_results WHERE datetime < ?"
+            values = [timestamp]
+            self.logger.log(LogLevel.TRACE, f"query = {query}")
+
+        self.logger.log(LogLevel.TRACE, f"query: '{query}', values: '{values}'")
+
+        cursor.execute(query, values)
+
+        self.logger.log(LogLevel.INFO, 'The results database may have been changed (operation: trim), consider updating the results page (i.e. by executing pkgtst report --render-jinja')
+
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+    def write_ct_result(self, test_name, passed, jobid=None):
+        if not os.path.exists(self.dbfile):
+            self.create_db_with_lock()
+        self.create_ct_tbl()
+
+        conn = sqlite3.connect(self.dbfile)
+        cursor = conn.cursor()
+
+        ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        variant = ""
+
+        if ":" in test_name:
+            index = test_name.find(":")
+            variant = test_name[index + 1:]
+            test_name = test_name[:index]
+
+        query = '''INSERT INTO ct_results (datetime, test_name, variant, passed) VALUES (?, ?, ?, ?)'''
+        values = [ts, test_name, variant, passed]
+        cursor.execute(query, values)
+        
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        self.logger.log(LogLevel.INFO, 'The ct_results database has been changed (operation: insert), consider updating the results page (i.e. by executing pkgtst report --render-jinja')
+
+        self.trim_ct_results(test_name)
+
+    def delete_package(self, package_id):
+
+        if not isinstance(package_id, list):
+            raise Exception(f"ERROR: in report_gen::delete_package package_id must be a list")
+
+        if not os.path.exists(self.dbfile):
+            self.create_db_with_lock()
+
+        conn = sqlite3.connect(self.dbfile)
+        cursor = conn.cursor()
+
+        column_names = self.hierarchy.components
+        values = package_id
+
+        if len(column_names) != len(package_id):
+            raise Exception(f"ERROR: in report_gen::delete_package package_id must be fully qualified")
+
+        where_clause = " AND ".join([f"{column} = ?" for column in column_names])
+
+        query = f"DELETE FROM results WHERE {where_clause}"
+        cursor.execute(query, values)
+
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        self.logger.log(LogLevel.INFO, 'The results database may have been changed (operation: delete), consider updating the results page (i.e. by executing pkgtst report --render-jinja')
+
+    def pprint_table_helper(self, data, no_truncation=False):
         if not data:
             print("No data to display.")
             return
@@ -122,11 +357,22 @@ VALUES (%s)''' % (self.column_string, ", ".join("?" * len(values)))
             headers = list(data[0].keys())
         except IndexError:
             headers = []
+
         max_widths = {key: max(len(str(row[key])) for row in data) for key in headers}
         max_widths = {key: max(max_widths[key], len(key)) for key in headers}
 
+        if not no_truncation:
+            terminal_width = shutil.get_terminal_size().columns
+            decorator_width = 3 * (len(headers) - 1)
+            content_width = sum(max_widths.values())
+            total_width = decorator_width + content_width
+            if total_width > terminal_width:
+                max_content_width = (terminal_width - decorator_width) // len(headers)
+                max_widths = {key: min(max_widths[key], max_content_width) for key in headers}
+
         # Print the header
-        header = " | ".join(f"{key:{max_widths[key]}}" for key in headers)
+        # header = " | ".join(f"{key:{max_widths[key]}}" for key in headers)
+        header = " | ".join(f"{key[:max_widths[key]]:<{max_widths[key]}}" for key in headers)
         print(header)
         print("-" * len(header))
 
@@ -140,7 +386,8 @@ VALUES (%s)''' % (self.column_string, ", ".join("?" * len(values)))
             for row in data:
                 for i in range(len(headers)):
                     key = headers[i]
-                    cell = f"{str(row[key]):{max_widths[key]}}"
+                    # cell = f"{str(row[key]):{max_widths[key]}}"
+                    cell = f"{str(row[key])[:max_widths[key]]:<{max_widths[key]}}"
                     if key.startswith("passed_"):
                         if row[key]:
                             cell = f"{GREEN_BG_BLACK_TEXT}{cell}{RESET}"
@@ -157,6 +404,34 @@ VALUES (%s)''' % (self.column_string, ", ".join("?" * len(values)))
 
         except BrokenPipeError:
             sys.stderr.close()
+
+    def get_ct_data(self):
+        conn = sqlite3.connect(self.dbfile)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM ct_results')
+
+        data = cursor.fetchall()
+        data = [dict(row) for row in data]
+
+        # apply warning filter
+        for row in data:
+            row['warn_only'] = False
+            for filter_set in self.ct_warn_only:
+                is_match = True
+                for component, value in filter_set.items():
+                    if row[component] != value:
+                        is_match = False
+                if is_match:
+                    row['warn_only'] = True
+                    break
+
+        data = sorted(data, key=lambda x: (x['test_name'], x['variant'], x['datetime']), reverse=True)
+
+        cursor.close()
+        conn.close()
+        return data
 
     def render_data(self, data, template_path=None):
         
@@ -178,25 +453,43 @@ VALUES (%s)''' % (self.column_string, ", ".join("?" * len(values)))
         summary['last_run'] = max([row['datetime'] for row in data])
 
         if template_path is None:
-            env = Environment(loader=FileSystemLoader(self.template_dir))
-            template = env.get_template(self.tbl_template_basename)
+            search_path = self.template_dir
+            basename = self.tbl_template_basename
         else:
-            env = Environment(loader=FileSystemLoader(os.path.dirname(template_path)))
-            import hashlib
-            def sha256_hash(value):
-                return hashlib.sha256(value.encode('utf-8')).hexdigest()
-            env.filters['hash'] = sha256_hash
-            template = env.get_template(os.path.basename(template_path))
+            search_path = os.path.dirname(template_path)
+            basename = os.path.basename(template_path)
 
-        # print(f"data: {data}")
+        env = Environment(loader=FileSystemLoader(search_path))
+        import hashlib
+        def sha256_hash(value):
+            return hashlib.sha256(value.encode('utf-8')).hexdigest()
+        env.filters['hash'] = sha256_hash
+        template = env.get_template(basename)
 
-        data = sorted(data, key=lambda x: (x['passed_fileint'], x['passed_fileint']))
-        rendered_html = template.render(data=data, summary=summary)
+        # if template_path is None:
+        #     env = Environment(loader=FileSystemLoader(self.template_dir))
+        #     template = env.get_template(self.tbl_template_basename)
+        # else:
+        #     env = Environment(loader=FileSystemLoader(os.path.dirname(template_path)))
+        #     import hashlib
+        #     def sha256_hash(value):
+        #         return hashlib.sha256(value.encode('utf-8')).hexdigest()
+        #     env.filters['hash'] = sha256_hash
+        #     template = env.get_template(os.path.basename(template_path))
+
+        ## data goes into this function sorted already
+        # data = sorted(data, key=lambda x: (x['passed_fileint'], x['passed_fileint']))
+
+        ct_data = self.get_ct_data()
+        rendered_html = template.render(data=data, summary=summary, ct_data=ct_data)
         with open(self.rendered_html, 'w') as fp:
             fp.write(rendered_html + "\n")
-            sys.stderr.write(f"Wrote: {self.rendered_html}\n")
+            self.logger.log(LogLevel.INFO, f"Wrote: {self.rendered_html}")
 
-    def print_table(self, filters=None, sort_keys=None, reverse=False, limit=None, limit_per=None, parseable=False, field_delimiter='|', fails_only=False, case_insensitive=False, render_jinja=False, template_path=None):
+    def print_table(self, filters=None, sort_keys=None, reverse=False, limit=None, limit_per=None, parseable=False, field_delimiter='|', fails_only=False, case_insensitive=False, render_jinja=False, template_path=None, no_truncation=False):
+
+        if limit_per is None and self.output_limit_per is not None:
+            limit_per = self.output_limit_per
 
         conn = sqlite3.connect(self.dbfile)
         conn.row_factory = sqlite3.Row
@@ -210,7 +503,7 @@ VALUES (%s)''' % (self.column_string, ", ".join("?" * len(values)))
         cursor.close()
         conn.close()
 
-        h = Hierarchy()
+        h = Hierarchy(config_path=self.config_path)
 
         if filters is not None:
             rm_indices = set()
@@ -225,6 +518,16 @@ VALUES (%s)''' % (self.column_string, ", ".join("?" * len(values)))
         if sort_keys is None:
             sort_keys = ":".join(h.components + ["datetime"])
 
+        def invert_string(s):
+            max_val = 255
+            inverted_string = ''.join(chr(max_val - ord(c)) for c in s)
+            return inverted_string
+
+        if 'datetime' in set(sort_keys.split(':')):
+            # we want to invert the order of date timestamps
+            for i in range(len(data)):
+                data[i]['datetime'] = invert_string(data[i]['datetime'])
+
         # Sort the data using the dynamically created sort key
         data = sorted(
             data,
@@ -234,6 +537,11 @@ VALUES (%s)''' % (self.column_string, ", ".join("?" * len(values)))
             ),
             reverse=reverse
         )
+
+        if 'datetime' in set(sort_keys.split(':')):
+            # we want to undo invert the previous invert operation
+            for i in range(len(data)):
+                data[i]['datetime'] = invert_string(data[i]['datetime'])
 
         if limit_per is not None:
             # indices[(component1, component2, ...)] = <list-of-valid-indices>
@@ -296,7 +604,7 @@ VALUES (%s)''' % (self.column_string, ", ".join("?" * len(values)))
                     sys.exit(0)
 
             else:
-                self.pprint_table_helper(data)
+                self.pprint_table_helper(data, no_truncation=no_truncation)
 
     def set_warn_only(self, filters, value=True):
         if not isinstance(value, bool):
@@ -325,3 +633,35 @@ VALUES (%s)''' % (self.column_string, ", ".join("?" * len(values)))
 
     def show_warn_only(self):
         self.pprint_table_helper(self.warn_only)
+
+    def print_ct_table(self, test_name=None, parsable=None, field_delimiter='|'):
+
+        ct_data = self.get_ct_data()
+
+        if test_name is not None and isinstance(test_name, str):
+            ct_data = [row for row in ct_data if row['test_name'] == test_name]
+
+        if parsable:
+            try:
+
+                data = ct_data
+
+                try:
+                    header = data[0].keys()
+                except IndexError:
+                    header = []
+
+                sys.stdout.write(f"{field_delimiter.join(header)}\n")
+
+                i = 1
+                for row in data:
+                    fields = [str(row[key]) for key in row]
+                    sys.stdout.write(f"{i}{field_delimiter}{field_delimiter.join(fields)}\n")
+                    sys.stdout.flush()
+                    i += 1
+
+            except BrokenPipeError:
+                sys.stderr.close()
+                sys.exit(0)
+        else:
+            self.pprint_table_helper(ct_data)
