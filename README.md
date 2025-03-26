@@ -43,29 +43,13 @@ pip install .
     
     You'll also want to replace the placeholder values, namely: `[fileint][dbfile]`, `[general][email]`, and `[report_gen][rendered_html]`.
     
-5. Execute the program for each package
+5. Test all packages
 
-    First you will want to check what packages the program detects on your system:
-    
 ```
-pkgtst enumerate
+pkgtst test --all
 ```
 
-    If the above command shows the output you expect based on your settings in `./etc/pkgtst.yaml`, proceed with executing the program.
-
-    If your system supports Slurm our default script should work for you:
-    
-```
-./exec_pkgtst.sh
-```
-
-    It will launch a Slurm job array with a job array task for each package. If you're not using Slurm, you'll need to somehow loop over each package manually, a simple example would be:
-    
-```
-while read -r PACKAGE_ID; do
-    pkgtst test "$PACKAGE_ID"
-done < <(pkgtst enumerate)
-```
+    Note: you can optionally do it with the `--slurm` flag which means that `pkgtst` will use a job array with an element for each detected package. You can tell `pkgtst` to list the packages with `pkgtst enumerate`.
 
 6. Viewing results
 
@@ -79,11 +63,41 @@ pkgtst report
 # print only three runs per package
 pkgtst report --limit-per 3
 
-# render the default jinja template (specified in ./etc/pkgtst.yaml)
+# render the default jinja template (the default template is determined by the `[report_gen][rendered_html]` parameter of the config file)
 pkgtst report --render-jinja
 
 # render an a different jinja template by specifying the path
-pkgtst report --template-path ./etc/templates/collapsible-table-w-dates.html
+pkgtst report --template-path ./etc/templates/static-table-wo-dates.html
 ```
 .html
+```
+
+7. (Bonus) Running custom tests
+
+    The main per-package test runs are for validating that there are no file system changes to the packages, and that there are no library not found errors. But in addition to that, we have a selection of custom tests, which each run an `sbatch` job and determine if it passes by checking the `ExitCode` field from the `sacct` command.
+
+    Important custom test commands:
+
+```
+# view all options for the custom_test subcommand
+pkgtst custom_test --help
+
+## list available custom tests
+
+pkgtst custom_test --list
+
+## run a specific custom test
+
+pkgtst custom_test TESTNAME[:VARIANT]
+
+# run all custom tests
+pkgtst custom_test --all
+
+# view results on the command-line
+
+pkgtst custom_test -p
+
+# Note: Alternatively, you can re-run `pkgtst report --render-jinja` to
+#       regenerate the HTML file. The default Jinja template includes the custom
+#       test results.
 ```
