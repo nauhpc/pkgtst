@@ -6,11 +6,14 @@ import sys
 
 if __name__ == '__main__':
 
-    
     own_path = os.path.abspath(__file__)
     base_dir = os.path.dirname(own_path)
-    config_path = os.path.join(base_dir, 'etc', 'pkgtst.yaml')
     print(f"base_dir: {base_dir}")
+
+    if len(sys.argv) == 2:
+        config_path = sys.argv[1]
+    else:
+        config_path = os.path.join(base_dir, 'etc', 'pkgtst.yaml')
 
     var_path = os.path.join(base_dir, 'var')
     var_db_path = os.path.join(var_path, 'db')

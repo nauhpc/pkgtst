@@ -32,7 +32,8 @@ DESCRIPTION
                       https://github.com/nauhpc/pkgtst)
 
     -u, --update      update project in place to latest commit of the specified
-                      repo"
+                      repo
+"
 }
 
 function die() {
@@ -43,12 +44,9 @@ function die() {
 }
 
 function git_sync_all() {
-    git branch -r \
-        | grep -v '\->' \
-        | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g" \
-        | while IFS= read -r remote; do \
-            git branch --track "${remote#origin/}" "$remote"; \
-          done
+    while IFS= read -r remote; do
+        git branch --track "${remote#origin/}" "$remote";
+    done < <(git branch -r | awk '!/->/ { print $1 }')
     git fetch --all
     git pull --all
 }
@@ -121,7 +119,6 @@ while [[ "$#" -gt 0 ]]; do
             else
                 VERSION="${1##*=}"
             fi
-            printf '%s\n' 'INFO: version setting ignored, not yet implemented' 1>&2
             ;;
         -r|--repo-url=*)
             if [[ "$1" == -r ]]; then
@@ -216,4 +213,21 @@ else
     . ./p-env/bin/activate || die "failed to activate python venv" 15
     pip install --upgrade pip || die "failed to update pip" 16
     pip install . || die "failed to install pkgtst python package" 17
+fi
+
+CONFIG_TO_EDIT=
+if [[ -n "$CONFIG_FILE" ]]; then
+    IFS= read -rd '' base_config_name < <(basename -z -- "$CONFIG_FILE")
+    CONFIG_TO_EDIT=./etc/"$base_config_name"
+fi
+
+read -r -p "Run post-install script (this will edit the ${CONFIG_TO_EDIT-./etc/pkgtst.yaml} config file)? [y/n]: "
+if [[ "$REPLY" =~ ^[yY]$ ]]; then
+    if [[ -f "$CONFIG_TO_EDIT" ]]; then
+        ./post-install "$CONFIG_FILE"
+        echo "INFO: reminder pkgtst will default to using ./etc/pkgtst.yaml"
+        echo "INFO: to use a non-default config file, either set the PKGTST_CONFIG_PATH env var or the -c|--config-file cmd-line arg when using pkgtst"
+    else
+        ./post-install
+    fi
 fi
