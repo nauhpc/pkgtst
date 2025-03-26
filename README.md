@@ -69,8 +69,6 @@ pkgtst report --render-jinja
 # render an a different jinja template by specifying the path
 pkgtst report --template-path ./etc/templates/static-table-wo-dates.html
 ```
-.html
-```
 
 7. (Bonus) Running custom tests
 
