@@ -221,7 +221,7 @@ if [[ -n "$CONFIG_FILE" ]]; then
     CONFIG_TO_EDIT=./etc/"$base_config_name"
 fi
 
-read -r -p "Run post-install script (this will edit the ${CONFIG_TO_EDIT-./etc/pkgtst.yaml} config file)? [y/n]: "
+read -r -p "Run post-install script (this will edit the ${CONFIG_TO_EDIT:-./etc/pkgtst.yaml} config file)? [y/n]: "
 if [[ "$REPLY" =~ ^[yY]$ ]]; then
     if [[ -f "$CONFIG_TO_EDIT" ]]; then
         ./post-install "$CONFIG_FILE"
