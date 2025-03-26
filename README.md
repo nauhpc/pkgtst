@@ -23,8 +23,8 @@ cd pkgtst
 2. We highly recommend installing this package in a python venv:
 
 ```
-python3 -m venv ./pkgtst-env
-. ./pkgtst-env
+python3 -m venv ./p-env
+. ./p-env
 ```
 
 3. Then install with pip:
@@ -84,4 +84,6 @@ pkgtst report --render-jinja
 
 # render an a different jinja template by specifying the path
 pkgtst report --template-path ./etc/templates/collapsible-table-w-dates.html
+```
+.html
 ```
