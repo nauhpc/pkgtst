@@ -18,7 +18,7 @@ DESCRIPTION
                       colon-separeted list of db file backups to copy into var/db
 
     -f CT_YAML_FILES, --ct-yaml-files=CT_YAML_FILES
-                      colon-separated list of custom test YAML configuration files to copy into var/custom_tests
+                      colon-separated list of custom test YAML configuration files to copy into var/custom_test
 
     -D DIRECTORY, --chdir=DIRECTORY
                       this directory will serve as the base dir (the base will
@@ -164,7 +164,7 @@ if [[ "$UPDATE" != 1 ]]; then
     git checkout "$VERSION" || die "ERROR: git checkout for ${VERSION@Q} failed" 8
     printf '%s\n' "INFO: cd'ing into ${REPO_DST@Q}" 1>&2
 
-    mkdir -vp ./etc ./var/db ./reports
+    mkdir -vp ./etc ./var/db ./var/custom_test/{scripts,output,results} ./reports
 
     set -x
     if [[ "${CONFIG_FILE:+X}" ]]; then
@@ -176,7 +176,7 @@ if [[ "$UPDATE" != 1 ]]; then
     done
 
     for i in "${CT_YAML_FILES[@]}"; do
-        cp -v "$i" ./var/custom_tests/
+        cp -v "$i" ./var/custom_test/scripts/
     done
     
     set +x
