@@ -12,24 +12,24 @@ import shutil
 
 from pkgtst.lib.logger import Logger
 from pkgtst.lib.logger import LogLevel
-
 from pkgtst.lib.fileint import Hierarchy
-
 from pkgtst.lib.custom_test import CustomTest
+from pkgtst.lib.utils import get_pkgtst_root
 
 class ReportGen():
 
     def __init__(self, config_path=None):
-        self.template_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'templates')
+        self.template_dir = os.path.join(get_pkgtst_root(), 'etc', 'templates')
         self.tbl_template_basename = 'template.html'
 
-        self.dbfile = os.path.join(os.path.dirname(__file__), '..', '..', 'var', 'db', 'results.sql')
-        self.rendered_html = os.path.join(os.path.dirname(__file__), '..', '..', 'var', 'html', 'test_results.html')
+        self.dbfile = os.path.join(get_pkgtst_root(), 'var', 'db', 'results.sql')
+        self.rendered_html = os.path.join(get_pkgtst_root(), 'var', 'html', 'test_results.html')
 
         if config_path is None:
-            self.config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'pkgtst.yaml')
+            self.config_path = os.path.join(get_pkgtst_root(), 'etc', 'pkgtst.yaml')
         else:
             self.config_path = config_path
+
         if os.path.exists(self.config_path):
             with open(self.config_path, 'r') as f:
                 self.config = yaml.safe_load(f)
@@ -486,7 +486,7 @@ DELETE FROM ct_results WHERE ROWID IN (
             fp.write(rendered_html + "\n")
             self.logger.log(LogLevel.INFO, f"Wrote: {self.rendered_html}")
 
-    def print_table(self, filters=None, sort_keys=None, reverse=False, limit=None, limit_per=None, parseable=False, field_delimiter='|', fails_only=False, case_insensitive=False, render_jinja=False, template_path=None, no_truncation=False):
+    def print_table(self, filters=None, sort_keys=None, reverse=False, limit=None, limit_per=None, parsable=False, field_delimiter='|', fails_only=False, case_insensitive=False, render_jinja=False, template_path=None, no_truncation=False):
 
         if limit_per is None and self.output_limit_per is not None:
             limit_per = self.output_limit_per
@@ -586,7 +586,7 @@ DELETE FROM ct_results WHERE ROWID IN (
             
         else:
             
-            if parseable:
+            if parsable:
 
                 try:
 

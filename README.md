@@ -28,14 +28,13 @@ python3 -m venv ./p-env
 ```
 
 3. Then install with pip:
+
 ```
 pip install .
-```
 
-    3.b. (Optional) Use the `post-install` script to set paths in the configuration file to be subdirectories of the base repo and create expected directories:
-    ```
-    ./post-install
-    ```
+# (Optional) Use the `post-install` script to set paths in the configuration file to be subdirectories of the base repo and create expected directories
+./post-install
+```
 
 4. Review the default configuration in `./etc/pkgtst.yaml`
 
@@ -98,4 +97,33 @@ pkgtst custom_test -p
 # Note: Alternatively, you can re-run `pkgtst report --render-jinja` to
 #       regenerate the HTML file. The default Jinja template includes the custom
 #       test results.
+```
+
+8. (Bonus) Custom test configuration
+
+    As the name suggests, these tests are customizable. You can drag and drop additional Slurm jobs there, and `pkgtst` will consider an `ExitCode` of 0 to be a success and any other value to mean that the job failed. If the script supports it, there is an option to include a YAML configuration file too in the `[custom_test][script]` directory.
+    
+    For example, by creating an `ior.yaml` in the same directory as the `ior.sh` script:
+
+```
+# ior.yaml
+variants:
+  type: slurm_feature_w_args
+  value:
+    - feature: myslurmfeature # this command will list Slurm features on your site: sinfo -h -a -e -o '%n %f'
+      sbatch_args: # set cmd-line args for the sbatch program, run 'man sbatch' to view all options
+        - '--ntasks=20'
+      args: # set cmd-line args for the ior.sh script, run './ior.sh --help' to view all options
+        - '--min-write=10000'
+        - '--min-read=5000'
+
+# Scripts that follow the `script.template` format will all use these options:
+#
+# OPTIONS
+#     -h, --help    print this help message
+#
+#     -d RESULTS_DIR, --results-dir=RESULTS_DIR
+#                   the directory in which to write temporary output files (if not set, will attempt to use TMPDIR or /tmp)
+#
+#     -c, --clean   clean the RESULTS_DIR dir (these files will not be removed by default)
 ```

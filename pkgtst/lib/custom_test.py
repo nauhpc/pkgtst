@@ -9,6 +9,7 @@ import subprocess
 
 from pkgtst.lib.logger import Logger
 from pkgtst.lib.logger import LogLevel
+from pkgtst.lib.utils import get_pkgtst_root
 
 class CustomTest:
 
@@ -18,7 +19,7 @@ class CustomTest:
         if config_path:
             self.config_path = config_path
         else:
-            self.config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'pkgtst.yaml')
+            self.config_path = os.path.join(get_pkgtst_root(), 'etc', 'pkgtst.yaml')
 
         if not os.path.exists(self.config_path):
             self.logger.log(LogLevel.ERROR, f"Configuration file does not exist at {self.config_path}")
@@ -246,7 +247,8 @@ class CustomTest:
             sbatch_args = [ '--time=1' ]
             sbatch_args += [ f"--output={self.output_dir}/{test_name}_waiter_%A.txt" ]
             sbatch_args += [ f"--dependency=afterany:{shlex.quote(str(jobid))}" ]
-            sbatch_args += [ f"--wrap='pkgtst custom_test {shlex.quote(test_name)} --write-result={shlex.quote(str(jobid))}'" ]
+            sbatch_args += [ f"--wrap=pkgtst custom_test {shlex.quote(test_name)} --write-result --jobid={shlex.quote(str(jobid))}" ]
+            # sbatch_args += [ f"--wrap='. ./p-env/bin/activate && pkgtst custom_test {shlex.quote(test_name)} --write-result={shlex.quote(str(jobid))}'" ]
 
             sbatch_args = [shlex.quote(i) for i in sbatch_args]
             

@@ -1,7 +1,6 @@
 fileint:
   dbfile: /path/to/my/fileint.sql
   debug: true
-  debug_level: null
   diff_hierarchy: true
   follow_symlinks: true
   format: sqlite3
@@ -19,6 +18,7 @@ general:
   ignore_paths: null
   path_limit: /packages
   email: noreply@example.com
+  debug_level: INFO
 report_gen:
   dbfile: /path/to/my/results.sql
   rendered_html: /path/to/my/results.html
@@ -26,6 +26,9 @@ report_gen:
   output_limit_per: 5
   warn_only: null
 custom_test:
-  script_dir: /path/to/my/custom_tests
+  script_dir: /path/to/my/custom_tests/scripts
   output_dir: /path/to/my/custom_tests/output
   results_dir: /path/to/my/custom_tests/results
+slurm_runner:
+  array_task_throttle: 16
+  req_constraints: []

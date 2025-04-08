@@ -6,6 +6,8 @@ from pkgtst.lib.logger import Logger
 from pkgtst.lib.logger import LogLevel
 from pkgtst.lib.custom_test import CustomTest
 from pkgtst.lib.slurm_runner import SlurmRunner
+from pkgtst.lib.utils import get_pkgtst_root
+from pkgtst.lib.config import ConfigUtil
 
 import argparse
 import sys
@@ -18,7 +20,7 @@ import pathlib
 def get_command_output(command):
     # Execute the command and get the output
     result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-    
+
     # Return the output as a single line
     return result.stdout.strip()
 
@@ -49,7 +51,7 @@ def do_test(package_id_string, do_reset=False, config_path=None):
 
     # read config file
     if config_path is None:
-        config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'pkgtst.yaml')
+        config_path = os.path.join(get_pkgtst_root(), 'etc', 'pkgtst.yaml')
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
@@ -69,7 +71,7 @@ def do_test(package_id_string, do_reset=False, config_path=None):
 
     # we'll assume a module name to be "{component1}/{component2}/..."
     h = Hierarchy(config_path=config_path)
-    lmod_arg = shlex.quote("/".join(h.components))
+    lmod_arg = shlex.quote(package_id_string.replace(":", "/"))
     stdout = get_command_output(f"module display {lmod_arg} &> /dev/null && echo -n exists")
     if len(stdout) > 0 and stdout == "exists":
         module_name = lmod_arg
@@ -84,9 +86,7 @@ def do_test(package_id_string, do_reset=False, config_path=None):
 
     # 3. run lnfs against the root dir of the package
     mlc = MissingLibScanner(config=config_path)
-    mlc.set_silent(True)
     pkg_base_paths = fi.get_filter_matches(filters)
-    # import pdb; pdb.set_trace()
     if len(pkg_base_paths) != 1:
         raise Exception(f"cancelling run, pkg_base_paths is {pkg_base_paths} (length is not one)")
     lib_scan_results = mlc.scan(pkg_base_paths, ld_lib_path)
@@ -130,7 +130,7 @@ def main():
     parser_print.add_argument('--reverse', action='store_true', help='Reverse the order of the sort')
     parser_print.add_argument('--limit', type=int, help='The max number of runs to show')
     parser_print.add_argument('--limit-per', type=int, help='The max number of runs to show for each unique package')
-    parser_print.add_argument('--parsable', action='store_true', help='Parsable table output')
+    parser_print.add_argument('-p', '--parsable', action='store_true', help='Parsable table output')
     parser_print.add_argument('--field-delimiter', type=str, default='|', help='Only used if --parsable is specified, default is \'|\'')
     parser_print.add_argument('--fails-only', action='store_true', help='Only show rows where there is at least one failed test')
     parser_print.add_argument('--case-insensitive', action='store_true', help='Any field sorts will be case insensitive')
@@ -139,9 +139,13 @@ def main():
     parser_print.add_argument('--reset-warn-only', action='store_true', help='If package_id is set, will edit config to persistently remove the setting which specifies the package as warn-only (meaning it will appear as an error in output)')
     parser_print.add_argument('--show-warn-only', action='store_true', help='Show packages set to be \'warn-only\'')
     parser_print.add_argument('-n', '--no-truncation', action='store_true', help='Print results without truncating columns to the width of the terminal (has no effect if --render-jinja is set)')
+    parser_print.add_argument('-l', '--last-log', action='store_true', help='Print the contents of the last Slurm log file generated for a particular package')
 
     # Create a subparser for the 'enumerate' command
-    parser_enumerate = subparsers.add_parser('enumerate', help='Enumerate packages')
+    parser_enumerate = subparsers.add_parser('enumerate', help='Print all package ids')
+    parser_enumerate.add_argument('-s', '--show-required-constraints', action='store_true', help='Show Slurm constraint mappings for packages that a constraint argument (dumps the [slurm_runner][req_constraints] config parameter instead of printing all package ids)')
+    parser_enumerate.add_argument('-f', '--filter-constraint', type=str, help='Print only the package ids of packages for which the specified constraint is required')
+    parser_enumerate.add_argument('-n', '--filter-no-constraint', action='store_true', help='Print only the package ids of packages for which an additional constraint argument is not required')
 
     # Create a subparser for the 'delete' command
     parser_delete = subparsers.add_parser('delete', help='Delete a specific version of a package')
@@ -163,6 +167,11 @@ def main():
     parser_custom_test.add_argument('-P', '--parsable', action='store_true', help='Use a parsable table format (only applicable if -p/--print is specified)')
     parser_custom_test.add_argument('--field-delimiter', type=str, default='|', help='Only used if -P/--parsable is specified, default is \'|\'')
     parser_custom_test.add_argument('--sbatch-args', action='append', help='Additional sbatch arg to be used for custom_test single-instance runs (invoke once per sbatch arg [i.e.: -s arg1 -s arg2 ... ])')
+
+    # Create a subparser for the 'config' command
+    parser_config = subparsers.add_parser('config', help='Get a config value')
+    parser_config.add_argument('specifier', type=str, help='Specifier to apply to the config file (example: \'general:debug_level\')')
+    parser_config.add_argument('-p', '--parsable', action='store_true', help='Will print primitive types without any formatting')
 
     args = parser.parse_args()
 
@@ -188,6 +197,9 @@ def main():
             else:
                 sys.stderr(f"ERROR: package_id must be specified on the command-line\n")
                 return 1
+        elif args.last_log:
+            runner = SlurmRunner(config_path=args.config_path)
+            runner.dump_last_log(args.package_id)
         else:
             filters = get_filters(args.package_id)
             reporter.print_table(
@@ -196,7 +208,7 @@ def main():
                 reverse=args.reverse,
                 limit=args.limit,
                 limit_per=args.limit_per,
-                parseable=args.parsable,
+                parsable=args.parsable,
                 field_delimiter=args.field_delimiter,
                 fails_only=args.fails_only,
                 case_insensitive=args.case_insensitive,
@@ -207,27 +219,58 @@ def main():
         return 0
     elif args.command == 'enumerate' or args.command == 'test':
 
-        # read config file
-        config_path = args.config_path
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                config = yaml.safe_load(f)
-                ignore_paths = config['general']['ignore_paths']
-        else:
-            ignore_paths = None
+        if args.command == 'test' or not args.show_required_constraints:
 
-        fi = FileInt(config=args.config_path)
-        h = Hierarchy(config_path=args.config_path)
+            # read config file
+            config_path = args.config_path
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f)
+                    ignore_paths = config['general']['ignore_paths']
+            else:
+                ignore_paths = None
 
-        pkgs = fi.get_hierarchy(ignore_paths)
+            fi = FileInt(config=args.config_path)
+            h = Hierarchy(config_path=args.config_path)
+
+            pkgs = fi.get_hierarchy(ignore_paths)
 
         if args.command == 'enumerate':
-            for row in pkgs:
-                try:
-                    sys.stdout.write(f"{':'.join([row[component] for component in h.components])}\n")
-                except BrokenPipeError:
-                    pass
-            return 0
+
+            if not args.show_required_constraints:
+
+                if args.filter_constraint or args.filter_no_constraint:
+                    runner = SlurmRunner(config_path=args.config_path)
+                    constraint_mappings = runner.req_constraints
+                    # constraints[package_id]: constraint
+                    constraints = dict()
+                    for row in constraint_mappings:
+                        for p in row['package_ids']:
+                            constraints[p] = row['constraint']
+
+                for row in pkgs:
+
+                    package_id = ':'.join([row[component] for component in h.components])
+
+                    if args.filter_constraint and \
+                       (package_id not in constraints or \
+                        constraints[package_id] != args.filter_constraint):
+                        continue
+
+                    if args.filter_no_constraint and package_id in constraints:
+                        continue
+                    
+                    try:
+                        sys.stdout.write(f"{package_id}\n")
+                    except BrokenPipeError:
+                        pass
+                return 0
+
+            else:
+                runner = SlurmRunner(config_path=args.config_path)
+                runner.print_req_constraints()
+                return 0
+                
         elif args.command == 'test':
 
             # 4 scenarios:
@@ -244,7 +287,8 @@ def main():
                         do_test(package_id, False, args.config_path)
                 elif args.slurm:
                     runner = SlurmRunner(config_path=args.config_path)
-                    runner.exec_all(pkgs=pkgs, skip_custom_tests=True)
+                    pkgs = [ ':'.join([row[component] for component in h.components]) for row in pkgs ]
+                    runner.exec_all(pkgs)
 
             else:
 
@@ -302,6 +346,9 @@ def main():
                 runner = SlurmRunner(config_path=args.config_path)
                 runner.render_job(dep_str)
         return 0
+    elif args.command == 'config':
+        cu = ConfigUtil(config_path=args.config_path)
+        cu.print_value(args.specifier, parsable=args.parsable)
     else:
         parser.print_help()
         return 1

@@ -2,15 +2,19 @@
 
 import re
 import os
+import sys
 import yaml
 import subprocess
 import pathlib
 import shlex
 import datetime
 import glob
+import shlex
+import pprint
 
 from pkgtst.lib.logger import Logger
 from pkgtst.lib.logger import LogLevel
+from pkgtst.lib.utils import get_pkgtst_root
 
 class SlurmRunner:
     def __init__(self, config_path=None):
@@ -19,7 +23,7 @@ class SlurmRunner:
         if config_path:
             self.config_path = config_path
         else:
-            self.config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'pkgtst.yaml')
+            self.config_path = os.path.join(get_pkgtst_root(), 'etc', 'pkgtst.yaml')
 
         if not os.path.exists(self.config_path):
             self.logger.log(LogLevel.ERROR, f"Configuration file does not exist at {self.config_path}")
@@ -27,9 +31,14 @@ class SlurmRunner:
         with open(self.config_path, 'r') as f:
             self.config = yaml.safe_load(f)
 
-        self.array_task_throttle = self.config['fileint']['array_task_throttle']
+        self.array_task_throttle = self.config['slurm_runner']['array_task_throttle']
+        self.req_constraints = self.config['slurm_runner']['req_constraints']
+        self.output_dir = self.config['slurm_runner']['output_dir']
 
         self.email = self.config['general']['email']
+
+        if not os.path.isdir(self.output_dir):
+            self.logger.log(LogLevel.ERROR, f"SlurmRunner's output_dir ({self.output_dir}) does not exist or is not a directory")
 
     def is_valid_email(self, email):
         email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -71,70 +80,83 @@ class SlurmRunner:
 
         return stdout, stderr, exit_code
 
-    # def exec_all(self, pkgs, skip_custom_tests=False):
-    def exec_all(self, pkgs=None, skip_package_tests=False, skip_custom_tests=False):
+    def exec_all(self, pkgs):
 
         if self.email is not None and isinstance(self.email, str):
             if self.is_valid_email(self.email):
-                self.run_cmd(f"printf '%s\\n' \"$(date)\" \"Running as $(whoami)\" | mailx -s 'executing '\\''pkgtst slurm_exec_all (skip_package_tests: {skip_package_tests}, skip_custom_tests: {skip_custom_tests})'\\''' {self.email}")
+                self.run_cmd(f"printf '%s\\n' \"$(date)\" \"Running as $(whoami)\" | mailx -s 'executing '\\''pkgtst is running SlurmRunner::exec_all (#pkgs: {len(pkgs)})'\\''' {self.email}")
 
-        self.logger.log(LogLevel.INFO, f"in SlurmRunner::exec_all() -- skip_package_tests: {skip_package_tests}, skip_custom_tests: {skip_custom_tests}")
+        # clean up log files from previous runs of this function
+        for old_logfile in glob.glob(f"{self.output_dir}/pkgtst_test_*.log"):
 
-        if skip_package_tests and skip_custom_tests:
-            self.logger.log(LogLevel.INFO, f"Nothing to do")
+            # redundant checks for safety
+            
+            if not os.path.isfile(old_logfile):
+                continue
 
-        if not skip_package_tests:
+            basename = os.path.basename(old_logfile)
+            if not (basename.startswith('pkgtst_test_') or basename.endswith('.log')):
+                continue
 
-            if pkgs is None or not isinstance(pkgs, list):
-                self.logger.log(LogLevel.ERROR, 'the pkgs argument for SlurmRunner::exec_all() must be a list in order to test packages')
+            self.logger.log(LogLevel.VERBOSE, f"Removing: {old_logfile}")
+            os.remove(old_logfile)
 
-            DIRNAME = str(pathlib.Path(__file__).resolve().parent.parent.parent)
-            N = len(pkgs)
-            output_file = os.path.join(DIRNAME, 'logs', 'pkgtst_combined.log')
+        # we have to categorize these packages based on the self.req_constraints (if set)
+        if self.req_constraints is not None and isinstance(self.req_constraints, list):
 
-            # clean up log files from previous runs of this function
-            logdir = os.path.join(DIRNAME, 'logs')
-            for old_logfile in glob.glob(f"{logdir}/pkgtst_test_*.log"):
-                # redundant checks for safety
-                
-                if not os.path.isfile(old_logfile):
-                    continue
-                
-                basename = os.path.basename(old_logfile)
-                if not (basename.startswith('pkgtst_test_') or basename.endswith('.log')):
-                    continue
+            # constraints[constraint] = <list-of-pkgs>
+            constraints = dict()
+            seen_pkgs = set()
+            for row in self.req_constraints:
+                constraint = row['constraint']
+                constraints[constraint] = row['package_ids']
+                seen_pkgs |= set(row['package_ids'])
 
-                self.logger.log(LogLevel.VERBOSE, f"Removing: {old_logfile}")
-                os.remove(old_logfile)
+            pkgs = [pkg for pkg in pkgs if pkg not in seen_pkgs]
+            self.exec_array(pkgs, script_args=['--filter-no-constraint'])
 
-            array_arg = f"1-{N}%{int(self.array_task_throttle)}"
-            job_script = os.path.join(DIRNAME, 'etc', 'job_script.sh')
+            for constraint in constraints:
+                self.exec_array(constraints[constraint], sbatch_args=[f"--constraint={constraint}"], script_args=[f"--filter-constraint={constraint}"])
+                    
+        else:
+            self.exec_array(pkgs)
+        
 
-            cmd = f"sbatch --array={shlex.quote(array_arg)} --output={shlex.quote(output_file)} {shlex.quote(job_script)} | awk '{{ print $4 }}'"
-            stdout, stderr, exit_code = self.run_cmd(cmd)
-            try:
-                jobid = int(stdout.strip())
-            except:
-                self.logger.log(LogLevel.ERROR, "unable to parse jobid, per-package job array submission likely failed")
+    def exec_array(self, pkgs, sbatch_args=[], script_args=[]):
 
-            self.logger.log(LogLevel.INFO, f"Package test job array's jobid: {jobid}")
+        self.logger.log(LogLevel.VERBOSE, f"in SlurmRunner::exec_array() -- #pkgs: {len(pkgs)}, sbatch_args: {sbatch_args}, script_args={script_args}")
 
-            date_str = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-            output_file = os.path.join(DIRNAME, "logs", f"render_jinja_{date_str}.log")
-            dep_str = f"afterany:{jobid}"
+        if pkgs is None or not isinstance(pkgs, list):
+            self.logger.log(LogLevel.ERROR, 'the pkgs argument for SlurmRunner::exec_all() must be a list in order to test packages')
 
-            cmd = f"sbatch --time=5 --job-name='render_jinja' --dependency={shlex.quote(dep_str)} --wrap='pkgtst report --render-jinja' --output={shlex.quote(output_file)}"
-            stdout, stderr, exit_code = self.run_cmd(cmd)
+        DIRNAME = str(pathlib.Path(__file__).resolve().parent.parent.parent)
+        N = len(pkgs)
+        output_file = os.path.join(self.output_dir, 'arrays', 'pkgtst_combined_%A.log')
 
-            if exit_code != 0:
-                self.logger.log(LogLevel.ERROR, 'cmd to submit render-jinja job failed')
+        array_arg = f"1-{N}%{int(self.array_task_throttle)}"
+        job_script = os.path.join(DIRNAME, 'etc', 'pkgtst_array.sh')
 
-        if not skip_custom_tests:
-            response = input("Are you sure that you want to continue with executing all custom_test runs? (yes/no): ")
-            if response == 'yes':
-                sys.stdout.write(f"Sorry, not yet able to fulfill this request\n")
-            else:
-                sys.stdout.write(f"Okay, bye\n")
+        sbatch_args = [shlex.quote(sbatch_arg) for sbatch_arg in sbatch_args]
+        script_args = [shlex.quote(script_arg) for script_arg in script_args]
+        
+        cmd = f"sbatch {' '.join(sbatch_args)} --array={shlex.quote(array_arg)} --output={shlex.quote(output_file)} {shlex.quote(job_script)} {' '.join(script_args)} | awk '{{ print $4 }}'"
+        stdout, stderr, exit_code = self.run_cmd(cmd)
+        try:
+            jobid = int(stdout.strip())
+        except:
+            self.logger.log(LogLevel.ERROR, "unable to parse jobid, per-package job array submission likely failed")
+
+        self.logger.log(LogLevel.INFO, f"Package test job array's jobid: {jobid}")
+
+        date_str = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        output_file = os.path.join(self.output_dir, 'render_jobs', f"render_jinja_{date_str}.log")
+        dep_str = f"afterany:{jobid}"
+
+        cmd = f"sbatch --time=5 --job-name='render_jinja' --dependency={shlex.quote(dep_str)} --wrap='pkgtst report --render-jinja' --output={shlex.quote(output_file)}"
+        stdout, stderr, exit_code = self.run_cmd(cmd)
+
+        if exit_code != 0:
+            self.logger.log(LogLevel.ERROR, 'cmd to submit render-jinja job failed')
 
     def exec_one(self, package_id):
 
@@ -142,9 +164,19 @@ class SlurmRunner:
             self.logger.log(LogLevel.ERROR, 'package_id must be a string')
 
         DIRNAME = str(pathlib.Path(__file__).resolve().parent.parent.parent)
-        job_script = os.path.join(DIRNAME, 'etc', 'test_pkg.sh')
+        job_script = os.path.join(DIRNAME, 'etc', 'pkgtst_single.sh')
 
-        cmd = f"sbatch {shlex.quote(job_script)} {shlex.quote(package_id)} | awk '{{ print $4 }}'"
+        sbatch_args = []
+
+        for setting in self.req_constraints:
+            constraint_arg = setting['constraint']
+            if package_id in setting['package_ids']:
+                sbatch_args = [ f'--constraint={constraint_arg}' ]
+
+
+        sbatch_args = [shlex.quote(arg) for arg in sbatch_args]
+
+        cmd = f"sbatch {' '.join(sbatch_args)} {shlex.quote(job_script)} {shlex.quote(package_id)} | awk '{{ print $4 }}'"
         stdout, stderr, exit_code = self.run_cmd(cmd)
         try:
             jobid = int(stdout.strip())
@@ -155,10 +187,37 @@ class SlurmRunner:
 
     def render_job(self, dep_str):
         DIRNAME = str(pathlib.Path(__file__).resolve().parent.parent.parent)
-        output_file = os.path.join(DIRNAME, 'logs', 'custom_test_watier_%A.log')
+        output_file = os.path.join(self.output_dir, 'custom_test_watier_%A.log')
         
         cmd = f"sbatch --time=5 --job-name='render_jinja' --dependency={shlex.quote(dep_str)} --wrap='pkgtst report --render-jinja' --output={shlex.quote(output_file)}"
         stdout, stderr, exit_code = self.run_cmd(cmd)
 
         if exit_code != 0:
             self.logger.log(LogLevel.ERROR, 'cmd to submit render-jinja job failed')
+
+    def print_req_constraints(self):
+
+        pprint.pprint(self.req_constraints)
+
+    def dump_last_log(self, package_id):
+        if not isinstance(package_id, str):
+            self.logger.log(LogLevel.ERROR, "in SlurmRunner::dump_last_log() -- package_id must be a string")
+
+        package_id = package_id.replace(':', '_')
+        
+        files = [f for f in glob.glob(f"{self.output_dir}/tests/pkgtst_test_{package_id}_*.log")]
+        files = sorted(files)
+
+        try:
+            last_log_file = files[-1]
+        except IndexError:
+            self.logger.log(LogLevel.INFO, 'No last log file')
+            return
+
+        self.logger.log(LogLevel.VERBOSE, f"last_log: {last_log_file}")
+        with open(last_log_file, 'r') as fp:
+            try:
+                sys.stdout.write(f"{fp.read()}\n")
+                sys.stdout.flush()
+            except BrokenPipeError:
+                sys.stdout.close()

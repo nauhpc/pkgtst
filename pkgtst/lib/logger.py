@@ -5,6 +5,8 @@ import sys
 import yaml
 import enum
 
+from pkgtst.lib.utils import get_pkgtst_root
+
 class LogLevel(enum.IntEnum):
     ERROR = 1
     WARNING = 2
@@ -22,7 +24,7 @@ class Logger:
             if os.environ.get('PKGTST_CONFIG_PATH'):
                 config_path = os.environ.get('PKGTST_CONFIG_PATH')
             else:
-                config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'pkgtst.yaml')
+                config_path = os.path.join(get_pkgtst_root(), 'etc', 'pkgtst.yaml')
 
         try:
 
@@ -49,6 +51,7 @@ class Logger:
                     self.log(LogLevel.ERROR, f"bad debug_level: {config['general']['debug_level']}")
 
         except Exception as e:
+            import pdb; pdb.set_trace()
             self.log(LogLevel.ERROR, f"Unexpected exception in Logger::__init__, self.debug_level {self.debug_level.name}")
 
     def log(self, level, msg):

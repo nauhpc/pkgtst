@@ -16,6 +16,7 @@ import re
 
 from pkgtst.lib.logger import Logger
 from pkgtst.lib.logger import LogLevel
+from pkgtst.lib.utils import get_pkgtst_root
 
 class MismatchType(enum.Enum):
     MISSING_ROW = 1
@@ -44,7 +45,7 @@ class Hierarchy:
 
             if config_path is None or not isinstance(config_path, str):
         
-                config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'pkgtst.yaml')
+                config_path = os.path.join(get_pkgtst_root(), 'etc', 'pkgtst.yaml')
 
             if not os.path.exists(config_path):
                 raise Exception(f'ERROR: Configuration file does not exist at {config_path}')
@@ -108,14 +109,13 @@ class FileInt:
         self.conn = None
         self.cursor = None
         self.invalidated = False
-        self.debug = False
         self.max_diff_prints = None
         self.pool_size = 4
 
         if config:
             self.config_path = config
         else:
-            self.config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'pkgtst.yaml')
+            self.config_path = os.path.join(get_pkgtst_root(), 'etc', 'pkgtst.yaml')
 
         if not os.path.exists(self.config_path):
             raise Exception(f'ERROR: Configuration file does not exist at {self.config_path}')
@@ -125,14 +125,11 @@ class FileInt:
 
         if not self.config['fileint']['dbfile']:
             if self.config['fileint']['format'] != 'pickle':
-                self.dbfile = os.path.join(os.path.dirname(__file__), '..', '..', 'var', 'db', 'fileint.sql')
+                self.dbfile = os.path.join(get_pkgtst_root(), 'var', 'db', 'fileint.sql')
             else:
-                self.dbfile = os.path.join(os.path.dirname(__file__), '..', '..', 'var', 'db', 'fileint.pkl')
+                self.dbfile = os.path.join(get_pkgtst_root(), 'var', 'db', 'fileint.pkl')
         else:
             self.dbfile = self.config['fileint']['dbfile']
-
-        if self.config['fileint']['debug']:
-            self.debug = True
 
         self.dbformat = self.config['fileint']['format']
         if self.config['fileint']['max_diff_prints']:
