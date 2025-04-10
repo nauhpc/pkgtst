@@ -1,5 +1,10 @@
+custom_test:
+  output_dir: /scratch/jfg95/hpc/pkgtst-from-github-v3/var/custom_test/output
+  results_dir: /scratch/jfg95/hpc/pkgtst-from-github-v3/var/custom_test/results
+  script_dir: /scratch/jfg95/hpc/pkgtst-from-github-v3/var/custom_test/scripts
 fileint:
-  dbfile: /path/to/my/fileint.sql
+  array_task_throttle: 16
+  dbfile: /scratch/jfg95/hpc/pkgtst-from-github-v3/var/db/fileint.sql
   debug: true
   diff_hierarchy: true
   follow_symlinks: true
@@ -10,25 +15,22 @@ fileint:
   max_diff_prints: 10
   no_duplicates: false
   pool_size: 4
-  array_task_throttle: 16
 general:
   base:
   - /packages
+  debug_level: INFO
+  email: noreply@example.com
   hierarchy: '{package_name}/{package_version}'
   ignore_paths: null
   path_limit: /packages
-  email: noreply@example.com
-  debug_level: INFO
 report_gen:
-  dbfile: /path/to/my/results.sql
-  rendered_html: /path/to/my/results.html
-  retention: 100 runs
+  ct_warn_only: []
+  dbfile: /scratch/jfg95/hpc/pkgtst-from-github-v3/var/db/results.sql
   output_limit_per: 5
+  rendered_html: /scratch/jfg95/hpc/pkgtst-from-github-v3/reports/results.html
+  retention: 100 runs
   warn_only: null
-custom_test:
-  script_dir: /path/to/my/custom_tests/scripts
-  output_dir: /path/to/my/custom_tests/output
-  results_dir: /path/to/my/custom_tests/results
 slurm_runner:
   array_task_throttle: 16
+  output_dir: /scratch/jfg95/hpc/pkgtst-from-github-v3/var/log
   req_constraints: []

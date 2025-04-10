@@ -248,7 +248,6 @@ class CustomTest:
             sbatch_args += [ f"--output={self.output_dir}/{test_name}_waiter_%A.txt" ]
             sbatch_args += [ f"--dependency=afterany:{shlex.quote(str(jobid))}" ]
             sbatch_args += [ f"--wrap=pkgtst custom_test {shlex.quote(test_name)} --write-result --jobid={shlex.quote(str(jobid))}" ]
-            # sbatch_args += [ f"--wrap='. ./p-env/bin/activate && pkgtst custom_test {shlex.quote(test_name)} --write-result={shlex.quote(str(jobid))}'" ]
 
             sbatch_args = [shlex.quote(i) for i in sbatch_args]
             

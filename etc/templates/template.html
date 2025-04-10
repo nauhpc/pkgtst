@@ -142,9 +142,11 @@
             PASS
           </td>
           {% else %}
-          <td style="background-color: red; color: white">
-            FAIL
-          </td>
+            {% if row.warn_only %}
+          <td style="background-color: yellow; color: black">WARNING</td>
+            {% else %}
+          <td style="background-color: red; color: white">FAIL</td>
+            {% endif %}
           {% endif %}
           {% if row.passed_lnfs %}
           <td style="background-color: green; color: white">
