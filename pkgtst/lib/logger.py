@@ -51,7 +51,6 @@ class Logger:
                     self.log(LogLevel.ERROR, f"bad debug_level: {config['general']['debug_level']}")
 
         except Exception as e:
-            import pdb; pdb.set_trace()
             self.log(LogLevel.ERROR, f"Unexpected exception in Logger::__init__, self.debug_level {self.debug_level.name}")
 
     def log(self, level, msg):

@@ -1,4 +1,4 @@
-# slurm_ezec_all.py
+# slurm_runner.py
 
 import re
 import os
@@ -129,7 +129,7 @@ class SlurmRunner:
         if pkgs is None or not isinstance(pkgs, list):
             self.logger.log(LogLevel.ERROR, 'the pkgs argument for SlurmRunner::exec_all() must be a list in order to test packages')
 
-        DIRNAME = str(pathlib.Path(__file__).resolve().parent.parent.parent)
+        DIRNAME = utils.get_pkgtst_root()
         N = len(pkgs)
         output_file = os.path.join(self.output_dir, 'arrays', 'pkgtst_combined_%A.log')
 
@@ -163,7 +163,7 @@ class SlurmRunner:
         if package_id is None or not isinstance(package_id, str):
             self.logger.log(LogLevel.ERROR, 'package_id must be a string')
 
-        DIRNAME = str(pathlib.Path(__file__).resolve().parent.parent.parent)
+        DIRNAME = utils.get_pkgtst_root()
         job_script = os.path.join(DIRNAME, 'etc', 'pkgtst_single.sh')
 
         sbatch_args = []
@@ -172,7 +172,6 @@ class SlurmRunner:
             constraint_arg = setting['constraint']
             if package_id in setting['package_ids']:
                 sbatch_args = [ f'--constraint={constraint_arg}' ]
-
 
         sbatch_args = [shlex.quote(arg) for arg in sbatch_args]
 
@@ -186,7 +185,7 @@ class SlurmRunner:
         self.logger.log(LogLevel.INFO, f"Package test job jobid (for {package_id}): {jobid}")
 
     def render_job(self, dep_str):
-        DIRNAME = str(pathlib.Path(__file__).resolve().parent.parent.parent)
+        DIRNAME = utils.get_pkgtst_root()
         output_file = os.path.join(self.output_dir, 'custom_test_watier_%A.log')
         
         cmd = f"sbatch --time=5 --job-name='render_jinja' --dependency={shlex.quote(dep_str)} --wrap='pkgtst report --render-jinja' --output={shlex.quote(output_file)}"

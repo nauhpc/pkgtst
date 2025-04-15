@@ -189,6 +189,10 @@ class CustomTest:
                     if variant is not None and variant in settings['variants']['value']:
                         sbatch_args += [ f"--constraint={variant}" ]
                 if settings['variants']['type'] == 'slurm_feature_w_args':
+
+                    if variant is None:
+                        self.logger.log(LogLevel.ERROR, f"ERROR: you must specify a variant for test_name '{test_name}'")
+                    
                     possible_variants = set()
                     arg_lists = dict()
                     sbatch_arg_lists = dict()
@@ -225,7 +229,6 @@ class CustomTest:
             stdout = stdout.strip()
             jobid = int(stdout)
         except:
-            import pdb; pdb.set_trace()
             self.logger.log(LogLevel.ERROR, f"unable to parse jobid, custom_test submission likely failed for {test_name}")
 
         if exit_code == 0:

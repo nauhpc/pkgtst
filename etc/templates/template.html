@@ -55,12 +55,12 @@
       <tbody>
         <tr>
           <td>File Integrity</td>
-          <td>{{ summary['fileint_fail_count'] }}</td>
+          <td>{{ summary['fileint_fail_count'] }} out of {{ summary['total_count'] }} runs</td>
           <td>{{ "%.2f" | format(summary['fileint_fail_percentage']) }}</td>
         </tr>
         <tr>
           <td>Missing Lib Scan</td>
-          <td>{{ summary['lnfs_fail_count'] }}</td>
+          <td>{{ summary['lnfs_fail_count'] }} out of {{ summary['total_count'] }} runs</td>
           <td>{{ "%.2f" | format(summary['lnfs_fail_percentage']) }}</td>
         </tr>
       </tbody>

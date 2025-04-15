@@ -438,15 +438,18 @@ DELETE FROM ct_results WHERE ROWID IN (
         summary = dict()
         summary['fileint_fail_count'] = 0
         summary['lnfs_fail_count'] = 0
+        summary['total_count'] = len(data)
+
         for row in data:
-            if not row['passed_fileint']:
+
+            if not row['warn_only'] and not row['passed_fileint']:
                 summary['fileint_fail_count'] += 1
-            if not row['passed_lnfs']:
+            if not row['warn_only'] and not row['passed_lnfs']:
                 summary['lnfs_fail_count'] += 1
 
-        if len(data) > 0:
-            summary['fileint_fail_percentage'] = 100 * summary['fileint_fail_count'] / len(data)
-            summary['lnfs_fail_percentage'] = 100 * summary['lnfs_fail_count'] / len(data)
+        if summary['total_count'] > 0:
+            summary['fileint_fail_percentage'] = 100 * summary['fileint_fail_count'] / summary['total_count']
+            summary['lnfs_fail_percentage'] = 100 * summary['lnfs_fail_count'] / summary['total_count']
         else:
             summary['fileint_fail_percentage'] = 100
             summary['lnfs_fail_percentage'] = 100
