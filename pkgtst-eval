@@ -286,7 +286,7 @@ else
     echo "Sending to recipients (ADDRS: ${ADDRS[@]})..."
     subject="pkgtest-eval results -- package test fails: ${SIZE@Q}, custom test fails: ${CT_SIZE@Q}, total: ${TOTAL@Q}"
     content="FAILED PACKAGE TEST RESUTLTS"$'\n'"$(pprint_fails)"$'\n\n'"FAILED CUSTOM TEST RESULTS"$'\n'"$(pprint_ct_fails)"
-    if [[ "$TEST_ONLY" = 1 ]]; then
+    if ! [[ "$TEST_ONLY" = 1 ]]; then
         printf '%s\n' "$content" | mailx -s "$subject" "${ADDRS[@]}"
     else
         printf 'to: %s\nsubject: %s\ncontent: %s\n' "${ADDRS[*]}" "$subject" "$content"
