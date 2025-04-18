@@ -230,7 +230,7 @@ IFS= read -rd '' SCRIPT_NAME < <(basename -z -- "${BASH_SOURCE[0]}")
 
 declare -a ADDRS
 N=1
-TEST_MODE=0
+TEST_ONLY=0
 
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
@@ -258,7 +258,7 @@ while [[ "$#" -gt 0 ]]; do
             ADDRS+=( "$1" )
             ;;
         -t|--test-mode)
-            TEST_MODE=1
+            TEST_ONLY=1
             ;;
         *)
             die "unrecognized argument ${1@Q}"$'\n'"$(usage)" 1
@@ -286,7 +286,7 @@ else
     echo "Sending to recipients (ADDRS: ${ADDRS[@]})..."
     subject="pkgtest-eval results -- package test fails: ${SIZE@Q}, custom test fails: ${CT_SIZE@Q}, total: ${TOTAL@Q}"
     content="FAILED PACKAGE TEST RESUTLTS"$'\n'"$(pprint_fails)"$'\n\n'"FAILED CUSTOM TEST RESULTS"$'\n'"$(pprint_ct_fails)"
-    if [[ "$TEST_ONLY" ]]; then
+    if [[ "$TEST_ONLY" = 1 ]]; then
         printf '%s\n' "$content" | mailx -s "$subject" "${ADDRS[@]}"
     else
         printf 'to: %s\nsubject: %s\ncontent: %s\n' "${ADDRS[*]}" "$subject" "$content"
