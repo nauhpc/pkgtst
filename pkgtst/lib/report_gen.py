@@ -598,7 +598,7 @@ DELETE FROM ct_results WHERE ROWID IN (
                     i = 1
                     for row in data:
                         fields = [str(row[key]) for key in row]
-                        sys.stdout.write(f"{i}{field_delimiter}{field_delimiter.join(fields)}\n")
+                        sys.stdout.write(f"{field_delimiter.join(fields)}\n")
                         sys.stdout.flush()
                         i += 1
 
@@ -659,7 +659,7 @@ DELETE FROM ct_results WHERE ROWID IN (
                 i = 1
                 for row in data:
                     fields = [str(row[key]) for key in row]
-                    sys.stdout.write(f"{i}{field_delimiter}{field_delimiter.join(fields)}\n")
+                    sys.stdout.write(f"{field_delimiter.join(fields)}\n")
                     sys.stdout.flush()
                     i += 1
 
