@@ -13,7 +13,7 @@ if __name__ == '__main__':
     base_dir = os.path.dirname(own_path)
     print(f"base_dir: {base_dir}")
 
-    parser = argparse.ArgumentParser(description='post-install - sets paths in config and adds PKGTST_ROOT to venv')
+    parser = argparse.ArgumentParser(description='post-install - sets paths in config file, creating dirs where necessary')
     parser.add_argument('-c', '--config-path', type=str, default=f"{base_dir}/etc/pkgtst.yaml", help='The config file to edit, if not set will attempt to use ./etc/pkgtst.yaml relative to this script')
     parser.add_argument('-e', '--venv', type=str, default=f"{base_dir}/p-env", help='The python venv directory (the dir specified with the for example: \'python3 -m venv ./MY_VENV_NAME\')')
     args = parser.parse_args()
