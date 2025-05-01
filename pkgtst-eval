@@ -22,10 +22,19 @@ ${BOLD}OPTIONS${END}
                       this script will email the specified addresses (default:
                       1)
 
+    -l LIMIT_PER, --limit-per=LIMIT_PER
+                      Look back at the last LIMIT_PER number of test for each
+                      test case (default: 1)
+
     -e ADDR, --email=ADDR
                       send any necessary email alerts to this address (can
                       specify this option multiple times for multiple email
                       addresses)
+
+    -p, --pkg-only
+                      Only review package test results
+
+    -c, --ct-only     Only review custom test runs
 
     -t, --test-mode   print any email messages to console instead of emailing"
 }
@@ -150,74 +159,83 @@ function parse_fails() {
     declare -g -A CT_FAILS
     CT_SIZE=0
 
-    # PACKAGE CUSTOM_TEST FAILS VARS -- END    
+    # PACKAGE CUSTOM_TEST FAILS VARS -- END
 
-    # for package tests
-    IFS='|'
-    while IFS= read -r LINE; do
-        set -- $LINE
+    if [[ "$CT_ONLY" != 1 ]]; then
+        
+        # for package tests
+        IFS='|'
+        while IFS= read -r LINE; do
+            set -- $LINE
 
-        if [[ "$read_header" != 1 ]]; then
-            i=1
-            while [[ "$#" -gt 0 ]]; do
-                FIELDS["$1"]="$i"
-                FIELDSR["$i"]="$1"
-                ((i++))
-                shift
-            done
-            read_header=1
-        else
+            if [[ "$read_header" != 1 ]]; then
+                i=1
+                while [[ "$#" -gt 0 ]]; do
+                    FIELDS["$1"]="$i"
+                    FIELDSR["$i"]="$1"
+                    ((i++))
+                    shift
+                done
+                read_header=1
+            else
 
-            set -- "$@"
+                set -- "$@"
 
-            if [[ "${!FIELDS[warn_only]}" = True ]] || \
-                   [[ "${!FIELDS[passed_fileint]}" = 1 && \
-                      "${!FIELDS[passed_lnfs]}" = 1 ]]; then
-                continue
+                if [[ "${!FIELDS[warn_only]}" = True ]] || \
+                       [[ "${!FIELDS[passed_fileint]}" = 1 && \
+                              "${!FIELDS[passed_lnfs]}" = 1 ]]; then
+                    continue
+                fi
+
+                for field in "${!FIELDS[@]}"; do
+                    value="${!FIELDS[$field]}"
+                    FAILS["$SIZE":"$field"]="$value"
+                done
+                ((SIZE++))
+
             fi
 
-            for field in "${!FIELDS[@]}"; do
-                value="${!FIELDS[$field]}"
-                FAILS["$SIZE":"$field"]="$value"
-            done
-            ((SIZE++))
+        done < <(pkgtst report --limit-per="$LIMIT_PER" --parsable 2> /dev/null)
 
-        fi
+    fi
 
-    done < <(pkgtst report --limit-per=1 --parsable 2> /dev/null)
+    if [[ "$PKG_ONLY"  != 1 ]]; then
 
-    # for custom tests
-    read_header=0
-    while IFS= read -r LINE; do
-        set -- $LINE
+        # for custom tests
+        read_header=0
+        IFS='|'
+        while IFS= read -r LINE; do
+            set -- $LINE
 
-        if [[ "$read_header" != 1 ]]; then
-            i=1
-            while [[ "$#" -gt 0 ]]; do
-                CT_FIELDS["$1"]="$i"
-                CT_FIELDSR["$i"]="$1"
-                ((i++))
-                shift
-            done
-            read_header=1
-        else
+            if [[ "$read_header" != 1 ]]; then
+                i=1
+                while [[ "$#" -gt 0 ]]; do
+                    CT_FIELDS["$1"]="$i"
+                    CT_FIELDSR["$i"]="$1"
+                    ((i++))
+                    shift
+                done
+                read_header=1
+            else
 
-            set -- "$@"
+                set -- "$@"
 
-            if [[ "${!CT_FIELDS[warn_only]}" = True ]] || \
-                   [[ "${!CT_FIELDS[passed]}" = 1 ]]; then
-                continue
+                if [[ "${!CT_FIELDS[warn_only]}" = True ]] || \
+                       [[ "${!CT_FIELDS[passed]}" = 1 ]]; then
+                    continue
+                fi
+
+                for field in "${!CT_FIELDS[@]}"; do
+                    value="${!CT_FIELDS[$field]}"
+                    CT_FAILS["$CT_SIZE":"$field"]="$value"
+                done
+                ((CT_SIZE++))
+
             fi
 
-            for field in "${!CT_FIELDS[@]}"; do
-                value="${!CT_FIELDS[$field]}"
-                CT_FAILS["$CT_SIZE":"$field"]="$value"
-            done
-            ((CT_SIZE++))
+        done < <(pkgtst custom_test --print --parsable --limit-per="$LIMIT_PER" 2> /dev/null)
 
-        fi
-
-    done < <(pkgtst custom_test --print --parsable 2> /dev/null)
+    fi
 
     IFS="$OLDIFS"
 
@@ -230,6 +248,9 @@ IFS= read -rd '' SCRIPT_NAME < <(basename -z -- "${BASH_SOURCE[0]}")
 
 declare -a ADDRS
 N=1
+LIMIT_PER=1
+PKG_ONLY=0
+CT_ONLY=0
 TEST_ONLY=0
 
 while [[ "$#" -gt 0 ]]; do
@@ -249,6 +270,17 @@ while [[ "$#" -gt 0 ]]; do
             fi
             N="$1"
             ;;
+        -l|--limit-per=*)
+            if [[ "$1" =~ ^.*=.*$ ]]; then
+                set -- "${1#*=}" "${@:2}"
+            else
+                shift
+            fi
+            if ! [[ "$1" =~ ^[0-9]+$ ]]; then
+                die "LIMIT_PER argument must be an int (value: ${1@Q})" 1
+            fi
+            LIMIT_PER="$1"
+            ;;
         -e|--email=*)
             if [[ "$1" =~ ^.*=.*$ ]]; then
                 set -- "${1#*=}" "${@:2}"
@@ -256,6 +288,12 @@ while [[ "$#" -gt 0 ]]; do
                 shift
             fi
             ADDRS+=( "$1" )
+            ;;
+        -p|--pkg-only)
+            PKG_ONLY=1
+            ;;
+        -c|--ct-only)
+            CT_ONLY=1
             ;;
         -t|--test-mode)
             TEST_ONLY=1
@@ -285,7 +323,7 @@ if [[ "${#ADDRS[@]}" -lt 1 ]]; then
 else
     echo "Sending to recipients (ADDRS: ${ADDRS[@]})..."
     subject="pkgtest-eval results -- package test fails: ${SIZE@Q}, custom test fails: ${CT_SIZE@Q}, total: ${TOTAL@Q}"
-    content="FAILED PACKAGE TEST RESUTLTS"$'\n'"$(pprint_fails)"$'\n\n'"FAILED CUSTOM TEST RESULTS"$'\n'"$(pprint_ct_fails)"
+    content="FAILED PACKAGE TEST RESULTS"$'\n'"$(pprint_fails)"$'\n\n'"FAILED CUSTOM TEST RESULTS"$'\n'"$(pprint_ct_fails)"
     if ! [[ "$TEST_ONLY" = 1 ]]; then
         printf '%s\n' "$content" | mailx -s "$subject" "${ADDRS[@]}"
     else

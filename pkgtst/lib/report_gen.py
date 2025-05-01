@@ -347,6 +347,43 @@ DELETE FROM ct_results WHERE ROWID IN (
 
         self.logger.log(LogLevel.INFO, 'The results database may have been changed (operation: delete), consider updating the results page (i.e. by executing pkgtst report --render-jinja')
 
+    def delete_ct(self, test_name):
+
+        if not isinstance(test_name, str):
+            raise Exception(f"ERROR: in report_gen::delete_ct test_name must be a string")
+
+        if not os.path.exists(self.dbfile):
+            self.create_db_with_lock()
+
+        conn = sqlite3.connect(self.dbfile)
+        cursor = conn.cursor()
+
+        variant = None
+
+        if ":" in test_name:
+            index = test_name.find(":")
+            variant = test_name[index + 1:]
+            test_name = test_name[:index]
+
+        column_names = ['test_name']
+        values = [test_name]
+
+        if variant is not None:
+            column_names.append('variant')
+            values.append(variant)
+
+        where_clause = " AND ".join([f"{column} = ?" for column in column_names])
+
+        query = f"DELETE FROM ct_results WHERE {where_clause}"
+        cursor.execute(query, values)
+
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        self.logger.log(LogLevel.INFO, 'The results database may have been changed (operation: delete), consider updating the results page (i.e. by executing pkgtst report --render-jinja')
+
     def pprint_table_helper(self, data, no_truncation=False):
         if not data:
             print("No data to display.")
@@ -434,7 +471,7 @@ DELETE FROM ct_results WHERE ROWID IN (
         return data
 
     def render_data(self, data, template_path=None):
-        
+
         summary = dict()
         summary['fileint_fail_count'] = 0
         summary['lnfs_fail_count'] = 0
@@ -469,21 +506,20 @@ DELETE FROM ct_results WHERE ROWID IN (
         env.filters['hash'] = sha256_hash
         template = env.get_template(basename)
 
-        # if template_path is None:
-        #     env = Environment(loader=FileSystemLoader(self.template_dir))
-        #     template = env.get_template(self.tbl_template_basename)
-        # else:
-        #     env = Environment(loader=FileSystemLoader(os.path.dirname(template_path)))
-        #     import hashlib
-        #     def sha256_hash(value):
-        #         return hashlib.sha256(value.encode('utf-8')).hexdigest()
-        #     env.filters['hash'] = sha256_hash
-        #     template = env.get_template(os.path.basename(template_path))
-
-        ## data goes into this function sorted already
-        # data = sorted(data, key=lambda x: (x['passed_fileint'], x['passed_fileint']))
-
         ct_data = self.get_ct_data()
+
+        summary['ct_fail_count'] = 0
+        summary['ct_total_count'] = len(ct_data)
+        
+        for row in ct_data:
+            if not row['warn_only'] and not row['passed']:
+                summary['ct_fail_count'] += 1
+
+        if summary['ct_total_count'] > 0:
+            summary['ct_fail_percentage'] = 100 * summary['ct_fail_count'] / summary['ct_total_count']
+        else:
+            summary['ct_fail_percentage'] = 100
+        
         rendered_html = template.render(data=data, summary=summary, ct_data=ct_data)
         with open(self.rendered_html, 'w') as fp:
             fp.write(rendered_html + "\n")
@@ -637,12 +673,39 @@ DELETE FROM ct_results WHERE ROWID IN (
     def show_warn_only(self):
         self.pprint_table_helper(self.warn_only)
 
-    def print_ct_table(self, test_name=None, parsable=None, field_delimiter='|'):
+    def print_ct_table(self, test_name=None, parsable=None, field_delimiter='|', limit_per=None):
 
         ct_data = self.get_ct_data()
 
         if test_name is not None and isinstance(test_name, str):
-            ct_data = [row for row in ct_data if row['test_name'] == test_name]
+
+            variant = None
+
+            if ":" in test_name:
+                index = test_name.find(":")
+                variant = test_name[index + 1:]
+                test_name = test_name[:index]
+                ct_data = [row for row in ct_data if row['test_name'] == test_name and row['variant'] == variant]
+            else:
+                ct_data = [row for row in ct_data if row['test_name'] == test_name]
+
+        if limit_per is not None:
+            # indices[(component1, component2, ...)] = <list-of-valid-indices>
+            # rm_indices = <set-of-indices-to-remove>
+            indices = dict()
+            rm_indices = set()
+            for i in range(len(ct_data)):
+                row = ct_data[i]
+                key = tuple([row['test_name'], row['variant']])
+                if key not in indices:
+                    indices[key] = [i]
+                else:
+                    # is there a potential for smarter filters here?
+                    if len(indices[key]) >= limit_per:
+                        rm_indices.add(i)
+                    else:
+                        indices[key].append(i)
+            ct_data = [ct_data[i] for i in range(len(ct_data)) if i not in rm_indices]
 
         if parsable:
             try:

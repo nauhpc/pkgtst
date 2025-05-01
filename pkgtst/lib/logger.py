@@ -15,10 +15,13 @@ class LogLevel(enum.IntEnum):
     TRACE = 5
 
 class Logger:
-    def __init__(self, config_path=None):
+    def __init__(self, config_path=None, skip_config_parse=False):
 
         # only in case we need to log something before this function completes
         self.debug_level = LogLevel.ERROR
+
+        if skip_config_parse:
+            return
 
         if config_path is None or not isinstance(config_path, str):
             if os.environ.get('PKGTST_CONFIG_PATH'):

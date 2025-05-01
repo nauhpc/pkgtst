@@ -224,7 +224,7 @@ fi
 read -r -p "Run post-install script (this will edit the ${CONFIG_TO_EDIT:-./etc/pkgtst.yaml} config file)? [y/n]: "
 if [[ "$REPLY" =~ ^[yY]$ ]]; then
     if [[ -f "$CONFIG_TO_EDIT" ]]; then
-        ./post-install "$CONFIG_TO_EDIT"
+        ./post-install -c "$CONFIG_TO_EDIT"
         echo "INFO: reminder pkgtst will default to using ./etc/pkgtst.yaml"
         echo "INFO: to use a non-default config file, either set the PKGTST_CONFIG_PATH env var or the -c|--config-file cmd-line arg when using pkgtst"
     else

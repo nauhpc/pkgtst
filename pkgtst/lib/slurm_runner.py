@@ -186,7 +186,7 @@ class SlurmRunner:
 
     def render_job(self, dep_str):
         DIRNAME = get_pkgtst_root()
-        output_file = os.path.join(self.output_dir, 'custom_test_watier_%A.log')
+        output_file = os.path.join(self.output_dir, 'custom_test_waiter_%A.log')
         
         cmd = f"sbatch --time=5 --job-name='render_jinja' --dependency={shlex.quote(dep_str)} --wrap='pkgtst report --render-jinja' --output={shlex.quote(output_file)}"
         stdout, stderr, exit_code = self.run_cmd(cmd)

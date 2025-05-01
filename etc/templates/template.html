@@ -63,6 +63,11 @@
           <td>{{ summary['lnfs_fail_count'] }} out of {{ summary['total_count'] }} runs</td>
           <td>{{ "%.2f" | format(summary['lnfs_fail_percentage']) }}</td>
         </tr>
+        <tr>
+          <td>Custom Tests</td>
+          <td>{{ summary['ct_fail_count'] }} out of {{ summary['ct_total_count'] }} runs</td>
+          <td>{{ "%.2f" | format(summary['ct_fail_percentage']) }}</td>
+        </tr>
       </tbody>
     </table>
     <table id="ct-results">

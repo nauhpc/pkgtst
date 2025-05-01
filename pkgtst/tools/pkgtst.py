@@ -163,10 +163,12 @@ def main():
     parser_custom_test.add_argument('-j', '--jobid', type=int, help='Slurm jobid (must be an int, this parameter is ignored if -w/--write-result is not set)')
     parser_custom_test.add_argument('-a', '--all', action='store_true', help='Run all custom tests (including all variants)')
     parser_custom_test.add_argument('-v', '--variant', action='store_true', help='Specify a variant of a test')
-    parser_custom_test.add_argument('test_name', nargs='?', type=str, help='Selected test')
+    parser_custom_test.add_argument('test_name', nargs='?', type=str, help='Selected test (format: TEST_NAME[:VARIANT])')
     parser_custom_test.add_argument('-P', '--parsable', action='store_true', help='Use a parsable table format (only applicable if -p/--print is specified)')
     parser_custom_test.add_argument('--field-delimiter', type=str, default='|', help='Only used if -P/--parsable is specified, default is \'|\'')
+    parser_custom_test.add_argument('-i', '--limit-per', type=int, help='Only used if -p/--print is specified')
     parser_custom_test.add_argument('--sbatch-args', action='append', help='Additional sbatch arg to be used for custom_test single-instance runs (invoke once per sbatch arg [i.e.: -s arg1 -s arg2 ... ])')
+    parser_custom_test.add_argument('-d', '--delete', action='store_true', help='Delete test results for specified TEST_NAME[:VARIANT]')
 
     # Create a subparser for the 'config' command
     parser_config = subparsers.add_parser('config', help='Get a config value')
@@ -179,7 +181,7 @@ def main():
         if os.environ.get('PKGTST_CONFIG_PATH'):
             args.config_path = os.environ.get('PKGTST_CONFIG_PATH')
         else:
-            args.config_path = os.path.join(os.getcwd(), 'etc', 'pkgtst.yaml')
+            args.config_path = os.path.join(get_pkgtst_root(), 'etc', 'pkgtst.yaml')
 
     logger = Logger(config_path=args.config_path)
 
@@ -324,12 +326,18 @@ def main():
             ct.list_tests()
         elif args.print:
             reporter = ReportGen(config_path=args.config_path)
-            reporter.print_ct_table(args.test_name, args.parsable, args.field_delimiter)
+            reporter.print_ct_table(test_name=args.test_name,
+                                    parsable=args.parsable,
+                                    field_delimiter=args.field_delimiter,
+                                    limit_per=args.limit_per)
         elif args.write_result:
             reporter = ReportGen(config_path=args.config_path)
             passed = ct.get_job_result(args.jobid)
             print(f"custom_test {args.test_name} Slurm job with jobid #{args.jobid} passed?: {passed}")
             reporter.write_ct_result(args.test_name, passed)
+        elif args.delete:
+            reporter = ReportGen(config_path=args.config_path)
+            reporter.delete_ct(args.test_name)
         else:
 
             # The default action will be to run the selected test
