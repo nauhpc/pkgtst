@@ -246,6 +246,3 @@ else
     echo "1" > "$lastrun_status"
     exit 1
 fi
-astrun_status"
-    exit 1
-fi

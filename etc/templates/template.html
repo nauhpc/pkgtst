@@ -21,12 +21,6 @@
             padding: 8px;
             text-align: center;
         }
-        /* tr:nth-child(even) { */
-        /*     background-color: #d3d3d3; */
-        /* } */
-        /* tr:nth-child(odd) { */
-        /*     background-color: white; */
-        /* } */
         tr[data-packageid], tr[data-ctid] {
             background-color: #d3d3d3;
         }
@@ -45,8 +39,13 @@
     </style>
   </head>
   <body>
+    <h1>
+      Results Summary (Updated: {{ summary['updated'] }})<br>
+    </h1>
     <table>
-      <caption>Test Summary (Last Run: {{ summary['last_run'] }})</caption>
+      <caption>
+        Last Run Statistics
+      </caption>
       <thead>
         <th>Test Name</th>
         <th>Failed (Count)</th>
@@ -55,28 +54,28 @@
       <tbody>
         <tr>
           <td>File Integrity</td>
-          <td>{{ summary['fileint_fail_count'] }} out of {{ summary['total_count'] }} runs</td>
-          <td>{{ "%.2f" | format(summary['fileint_fail_percentage']) }}</td>
+          <td>{{ summary['fileint']['fail'] }} out of {{ summary['fileint']['total'] }} packages</td>
+          <td>{{ "%.2f" | format(100 * summary['fileint']['fail'] / summary['fileint']['total']) }}</td>
         </tr>
         <tr>
           <td>Missing Lib Scan</td>
-          <td>{{ summary['lnfs_fail_count'] }} out of {{ summary['total_count'] }} runs</td>
-          <td>{{ "%.2f" | format(summary['lnfs_fail_percentage']) }}</td>
+          <td>{{ summary['lnfs']['fail'] }} out of {{ summary['lnfs']['total'] }} packages</td>
+          <td>{{ "%.2f" | format(100 * summary['lnfs']['fail'] / summary['lnfs']['total'])}}</td>
         </tr>
         <tr>
           <td>Custom Tests</td>
-          <td>{{ summary['ct_fail_count'] }} out of {{ summary['ct_total_count'] }} runs</td>
-          <td>{{ "%.2f" | format(summary['ct_fail_percentage']) }}</td>
+          <td>{{ summary['ct']['fail'] }} out of {{ summary['ct']['total'] }} custom tests</td>
+          <td>{{ "%.2f" | format(100 * summary['ct']['fail'] / summary['ct']['total']) }}</td>
         </tr>
       </tbody>
     </table>
     <table id="ct-results">
       <caption>Custom Test Results</caption>
       <thead>
-        <th>datetime</th>
-        <th>test_name</th>
-        <th>variant</th>
-        <th>passed</th>
+        <th>Datetime</th>
+        <th>Test Name</th>
+        <th>Variant</th>
+        <th>Passed</th>
       </thead>
       <tbody>
       {% set ps = namespace(last_test_name=None, last_variant=None, ctid=None) %}

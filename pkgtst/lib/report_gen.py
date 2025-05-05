@@ -473,24 +473,44 @@ DELETE FROM ct_results WHERE ROWID IN (
     def render_data(self, data, template_path=None):
 
         summary = dict()
-        summary['fileint_fail_count'] = 0
-        summary['lnfs_fail_count'] = 0
-        summary['total_count'] = len(data)
+
+        summary['updated'] = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+        
+        # holds summary keys: pass/fail/warn counts
+        summary['fileint'] = {'pass': 0, 'fail': 0, 'warn': 0, 'total': 0}
+        summary['lnfs'] = {'pass': 0, 'fail': 0, 'warn': 0, 'total': 0}
+        summary['ct'] = {'pass': 0, 'fail': 0, 'warn': 0, 'total': 0}
+
+        seen_pkgs = set()
 
         for row in data:
 
-            if not row['warn_only'] and not row['passed_fileint']:
-                summary['fileint_fail_count'] += 1
-            if not row['warn_only'] and not row['passed_lnfs']:
-                summary['lnfs_fail_count'] += 1
+            package_id = ""
+            for c in self.hierarchy.components:
+                if len(package_id) == 0:
+                    package_id = row[c]
+                else:
+                    package_id += f":{c}"
 
-        if summary['total_count'] > 0:
-            summary['fileint_fail_percentage'] = 100 * summary['fileint_fail_count'] / summary['total_count']
-            summary['lnfs_fail_percentage'] = 100 * summary['lnfs_fail_count'] / summary['total_count']
-        else:
-            summary['fileint_fail_percentage'] = 100
-            summary['lnfs_fail_percentage'] = 100
-        summary['last_run'] = max([row['datetime'] for row in data])
+            if not package_id in seen_pkgs:
+
+                if row['passed_fileint']:
+                    summary['fileint']['pass'] += 1
+                elif row['warn_only']:
+                    summary['fileint']['warn'] += 1
+                else:
+                    summary['fileint']['fail'] += 1
+                summary['fileint']['total'] += 1
+
+                if row['passed_lnfs']:
+                    summary['lnfs']['pass'] += 1
+                elif row['warn_only']:
+                    summary['lnfs']['warn'] += 1
+                else:
+                    summary['lnfs']['fail'] += 1
+                summary['lnfs']['total'] += 1
+
+                seen_pkgs.add(package_id)
 
         if template_path is None:
             search_path = self.template_dir
@@ -508,17 +528,23 @@ DELETE FROM ct_results WHERE ROWID IN (
 
         ct_data = self.get_ct_data()
 
-        summary['ct_fail_count'] = 0
-        summary['ct_total_count'] = len(ct_data)
-        
-        for row in ct_data:
-            if not row['warn_only'] and not row['passed']:
-                summary['ct_fail_count'] += 1
+        seen_cts = set()
 
-        if summary['ct_total_count'] > 0:
-            summary['ct_fail_percentage'] = 100 * summary['ct_fail_count'] / summary['ct_total_count']
-        else:
-            summary['ct_fail_percentage'] = 100
+        for row in ct_data:
+
+            test_id = f"{row['test_name']}:{row['variant']}"
+
+            if not test_id in seen_cts:
+
+                if row['passed']:
+                    summary['ct']['pass'] += 1
+                elif row['warn_only']:
+                    summary['ct']['warn'] += 1
+                else:
+                    summary['ct']['fail'] += 1
+                summary['ct']['total'] += 1
+
+                seen_cts.add(test_id)
         
         rendered_html = template.render(data=data, summary=summary, ct_data=ct_data)
         with open(self.rendered_html, 'w') as fp:
