@@ -9,14 +9,14 @@ It does this with three types of software tests:
 
 2. detecting missing libraries as reported by the `ldd` command
 
-3. templated test runs (planned)
+3. custom tests
 
 # Quickstart Tutorial
 
 1. Clone the project and `cd` into it:
 
 ```
-git clone https://nauhpc/pkgtst
+git clone https://github.com/nauhpc/pkgtst
 cd pkgtst
 ```
 
