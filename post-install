@@ -81,3 +81,4 @@ if __name__ == '__main__':
             with open(activate_script, 'a') as fp:
                 fp.write(f"{export_cmd}\n")
             sys.stdout.write(f"Appended {export_cmd} to {activate_script}\n")
+            sys.stdout.write(f"Note: edited venv to include PKGTST_ROOT setting, reactivate the venv to edit the current shell environment\n")
