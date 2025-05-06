@@ -24,7 +24,7 @@ cd pkgtst
 
 ```
 python3 -m venv ./p-env
-. ./p-env
+. ./p-env/bin/activate
 ```
 
 3. Then install with pip:
@@ -32,7 +32,14 @@ python3 -m venv ./p-env
 ```
 pip install .
 
-# (Optional) Use the `post-install` script to set paths in the configuration file to be subdirectories of the base repo and create expected directories
+# (Optional) Execute the `post-install` script, which:
+# 1. sets paths in the configuration file to be subdirectories of the base repo
+# 2. create needed directories
+# 3. adds PKGTST_ROOT setting to the ./p-env/bin/activate script
+#    - if you don't run the post-install script, you'll still need the
+#      PKGTST_ROOT env var setting (example:
+#      `export PKGTST_ROOT='/scratch/billy/pkgtst-repro/pkgtst'`)
+
 ./post-install
 ```
 
@@ -62,7 +69,8 @@ pkgtst report
 # print only three runs per package
 pkgtst report --limit-per 3
 
-# render the default jinja template (the default template is determined by the `[report_gen][rendered_html]` parameter of the config file)
+# render the default jinja template (the default template is determined by the
+# `[report_gen][rendered_html]` parameter of the config file)
 pkgtst report --render-jinja
 
 # render an a different jinja template by specifying the path
