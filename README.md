@@ -7,7 +7,7 @@ It does this with three types of software tests:
 
 1. File Integrity
 
-    Walks the contents of a package and records the file and ownership permissions, as well as size, date and checksum and stores them in a local sqlite db. If any of these attributes change, pkgtst will notice and record it
+    Walks the contents of a package and checks if any of the attributes such as the POSIX file permissions, size, date, and hashes have changed from that which was recorded in pkgtst's database
 
 2. Missing Library Scan
 
