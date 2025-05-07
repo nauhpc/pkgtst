@@ -306,7 +306,6 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
             relative_path = relative_path[1:]
 
         result = {'mode': perms, 'mod_time': mtime, 'file_size': size, 'content_hash': sha256}
-        # result = {'mode': perms, 'mod_time': mtime, 'file_size': size, 'content_hash': sha256, 'base_path': base_path}
 
         return result
 
@@ -545,11 +544,9 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
                         base_path = fpath
 
                         new_row = {'hash_of_blob': ''}
-                        # fileint_tbl[base_path] = {'hash_of_blob': ''}
 
                         i = 0
                         for component in fpath.split("/")[-h:]:
-                            # fileint_tbl[base_path][self.config['fileint']['hierarchy'][i]] = component
                             new_row[self.config['fileint']['hierarchy'][i]] = component
                             i += 1
 
@@ -585,8 +582,6 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
                             file_tbl[key] = new_row
                             metadata.append(list(new_row.values()))
 
-                    # IMPORTANT, CHECK LOGIC, IS THIS INDENTATION RIGHT?
-                    # IT WAS PREVIOUSLY UP/LEFT BY 1 INDENTATION LEVEL
                     metadata_hash = self.sha256_checksum_metadata(metadata)
                     fileint_tbl[base_path]['hash_of_blob'] = metadata_hash
                 
@@ -655,7 +650,6 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
             for fpath in files:
                 metadata = []
                 fpath = str(pathlib.Path(fpath))
-                # print(f"fpath: {fpath}")
                 # # using resolve here means that if two packages point to eachother, there will only be one entry
                 # # not doing so, means that they are treated like entirely unique directories
                 # fpath = str(pathlib.Path(fpath).resolve())
@@ -704,7 +698,8 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
                 break
             fi_query += " AND "
             filters_i += 1
-        print(f"fi_query_count: {fi_query}")
+
+        self.logger.log(LogLevel.VERBOSE, f"fi_query_count: {fi_query}")
 
         self.cursor.execute(fi_query)
         fetch = self.cursor.fetchall()

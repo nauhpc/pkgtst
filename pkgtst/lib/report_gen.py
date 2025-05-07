@@ -423,7 +423,6 @@ DELETE FROM ct_results WHERE ROWID IN (
             for row in data:
                 for i in range(len(headers)):
                     key = headers[i]
-                    # cell = f"{str(row[key]):{max_widths[key]}}"
                     cell = f"{str(row[key])[:max_widths[key]]:<{max_widths[key]}}"
                     if key.startswith("passed_"):
                         if row[key]:

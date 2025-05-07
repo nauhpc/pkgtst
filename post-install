@@ -63,13 +63,13 @@ if __name__ == '__main__':
         sys.stdout.write(f"Set paths in {args.config_path}\n")
 
     activate_script = f"{args.venv}/bin/activate"
+    export_cmd = f"export PKGTST_ROOT={shlex.quote(base_dir)}"
 
     if not os.path.exists(activate_script):
-        sys.stderr.write(f"{activate_script} does not exist! -- Did you create a python venv?")
+        sys.stderr.write(f'Venv activate script not found at {activate_script}, either re-run this script with "-e path/to/venv" or incorporate {export_cmd} into your workflow elsewhere\n')
     else:
     
         skip_export_cmd = False
-        export_cmd = f"export PKGTST_ROOT={shlex.quote(base_dir)}"
 
         with open(activate_script, 'r') as fp:
             lines = fp.readlines()

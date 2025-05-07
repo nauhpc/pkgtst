@@ -18,7 +18,7 @@ fileint:
 general:
   base:
   - /packages
-  debug_level: INFO
+  debug_level: WARNING
   email: noreply@example.com
   hierarchy: '{package_name}/{package_version}'
   ignore_paths: null

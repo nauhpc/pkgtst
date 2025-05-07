@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -N 2
 #SBATCH -n 2
-#SBATCH --output=/scratch/jfg95/tmp/output.txt
+#SBATCH --time=4:00
 
 function die() {
     local msg="$1"
@@ -81,6 +81,13 @@ else
 fi
 
 trap cleanup EXIT
+
+setup
+
+execute
+
+evaluate
+
 
 setup
 
