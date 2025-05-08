@@ -88,7 +88,7 @@ def do_test(package_id_string, do_reset=False, config_path=None):
     mlc = MissingLibScanner(config=config_path)
     pkg_base_paths = fi.get_filter_matches(filters)
     if len(pkg_base_paths) != 1:
-        logger.log(LogLevel.ERROR, f"pkg_base_path resolution ambiguous for package_id {package_id}, cannot proceed, revise the config file (possible hierarchy settings mistake, or a path needs to be added to ignore_paths)")
+        logger.log(LogLevel.ERROR, f"pkg_base_path resolution ambiguous for package_id {package_id_string}, cannot proceed, revise the config file (possible hierarchy settings mistake, or a path needs to be added to ignore_paths)")
     lib_scan_results = mlc.scan(pkg_base_paths, ld_lib_path)
 
     if (fi_results[2] is None or len(fi_results[2]) == 0) and (fi_results[3] is None or len(fi_results[3]) == 0):
