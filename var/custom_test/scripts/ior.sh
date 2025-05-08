@@ -230,7 +230,6 @@ if ! [[ -x "$IOR_EXE" ]]; then
     die "IOR_EXE (${IOR_EXE@Q}) either doesn't exist or is not executable" 1
 fi
 
-# RESULTS_DIR="/common/adm/monsoon_tests/pkgtst/ior"
 date="$(date +"%Y%m%d.%H%M")"
 log="$RESULTS_DIR"/results/ior_"$date".out
 lastrun_status="$RESULTS_DIR"/lastrun.status
