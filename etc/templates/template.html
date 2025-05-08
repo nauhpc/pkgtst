@@ -55,17 +55,29 @@
         <tr>
           <td>File Integrity</td>
           <td>{{ summary['fileint']['fail'] }} out of {{ summary['fileint']['total'] }} packages</td>
+          {% if summary['fileint']['total'] > 0 %}
           <td>{{ "%.2f" | format(100 * summary['fileint']['fail'] / summary['fileint']['total']) }}</td>
+          {% else %}
+          <td>N/A</td>
+          {% endif %}
         </tr>
         <tr>
           <td>Missing Lib Scan</td>
           <td>{{ summary['lnfs']['fail'] }} out of {{ summary['lnfs']['total'] }} packages</td>
+          {% if summary['lnfs']['total'] > 0 %}
           <td>{{ "%.2f" | format(100 * summary['lnfs']['fail'] / summary['lnfs']['total'])}}</td>
+          {% else %}
+          <td>N/A</td>
+          {% endif %}
         </tr>
         <tr>
           <td>Custom Tests</td>
           <td>{{ summary['ct']['fail'] }} out of {{ summary['ct']['total'] }} custom tests</td>
+          {% if summary['ct']['total'] > 0 %}
           <td>{{ "%.2f" | format(100 * summary['ct']['fail'] / summary['ct']['total']) }}</td>
+          {% else %}
+          <td>N/A</td>
+          {% endif %}
         </tr>
       </tbody>
     </table>

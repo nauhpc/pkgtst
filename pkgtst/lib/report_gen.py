@@ -446,10 +446,13 @@ DELETE FROM ct_results WHERE ROWID IN (
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        cursor.execute('SELECT * FROM ct_results')
-
-        data = cursor.fetchall()
-        data = [dict(row) for row in data]
+        try:
+            cursor.execute('SELECT * FROM ct_results')
+            data = cursor.fetchall()
+            data = [dict(row) for row in data]
+        except sqlite3.OperationalError:
+            self.logger.log(LogLevel.VERBOSE, "Sqlite select query failed, have you executed any package tests yet?")
+            data = []
 
         # apply warning filter
         for row in data:
@@ -559,10 +562,13 @@ DELETE FROM ct_results WHERE ROWID IN (
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        cursor.execute('SELECT * FROM results')
-
-        data = cursor.fetchall()
-        data = [dict(row) for row in data]
+        try:
+            cursor.execute('SELECT * FROM results')
+            data = cursor.fetchall()
+            data = [dict(row) for row in data]
+        except sqlite3.OperationalError:
+            self.logger.log(LogLevel.VERBOSE, "Sqlite select query failed, have you executed any custom tests yet?")
+            data = []
 
         cursor.close()
         conn.close()

@@ -26,11 +26,7 @@ It does this with three types of software tests:
     cd pkgtst
     ```
 
-    This directory will serve as your package test root directory. Later, to use the project you will have to set the environment variable:
-
-    ```
-    export PKGTST_ROOT=/path/to/my/pkgtst
-    ```
+    This directory will serve as your package test root directory. Later, to use the project you will have to set the environment variable `PKGTST_ROOT` to this path.
 
 2. Environment setupy
 
