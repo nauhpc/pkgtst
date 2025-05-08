@@ -442,17 +442,20 @@ DELETE FROM ct_results WHERE ROWID IN (
             sys.stderr.close()
 
     def get_ct_data(self):
-        conn = sqlite3.connect(self.dbfile)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
 
-        try:
+        if os.path.exists(self.dbfile):
+        
+            conn = sqlite3.connect(self.dbfile)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
             cursor.execute('SELECT * FROM ct_results')
             data = cursor.fetchall()
             data = [dict(row) for row in data]
-        except sqlite3.OperationalError:
-            self.logger.log(LogLevel.VERBOSE, "Sqlite select query failed, have you executed any package tests yet?")
-            data = []
+
+        else:
+           self.logger.log(LogLevel.VERBOSE, f"Results sqlite file not found at {self.dbfile}, have you executed any custom tests yet?")
+           data = []
 
         # apply warning filter
         for row in data:
@@ -558,20 +561,19 @@ DELETE FROM ct_results WHERE ROWID IN (
         if limit_per is None and self.output_limit_per is not None:
             limit_per = self.output_limit_per
 
-        conn = sqlite3.connect(self.dbfile)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        if os.path.exists(self.dbfile):
+            conn = sqlite3.connect(self.dbfile)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
 
-        try:
             cursor.execute('SELECT * FROM results')
             data = cursor.fetchall()
             data = [dict(row) for row in data]
-        except sqlite3.OperationalError:
-            self.logger.log(LogLevel.VERBOSE, "Sqlite select query failed, have you executed any custom tests yet?")
-            data = []
-
-        cursor.close()
-        conn.close()
+            cursor.close()
+            conn.close()
+        else:
+           self.logger.log(LogLevel.VERBOSE, f"Results sqlite file not found at {self.dbfile}, have you executed any package tests yet?")
+           data = []
 
         h = Hierarchy(config_path=self.config_path)
 
