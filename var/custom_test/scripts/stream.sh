@@ -1,8 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=pkgtst_stream
 #SBATCH --time=5:00
-##SBATCH --chdir=/scratch/pkgtst
-##SBATCH --output=/common/adm/monsoon_tests/pkgtst/stream/slurm.out
 #SBATCH --exclusive
 
 function usage() {

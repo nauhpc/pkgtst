@@ -1,13 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=pkgtst_ior
 #SBATCH --time=5:00
-##SBATCH --chdir=/scratch/pkgtst
-##SBATCH --output=/common/adm/monsoon_tests/pkgtst/ior/slurm.out
 #SBATCH --ntasks=28
 #SBATCH -N 1
 #SBATCH --exclusive
-##SBATCH --mem=32000
-##SBATCH --constraint=epyc
 
 function usage() {
     printf '%b\n' "${BOLD}NAME${END}

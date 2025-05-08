@@ -3,11 +3,9 @@
 # The acceptable min value for the elbencho test will be sent as an argument to this script
 #SBATCH --job-name=pkgtst_elbencho
 #SBATCH --time=10:00
-##SBATCH --output=/common/adm/monsoon_tests/pkgtst/elbencho/slurm.out
 #SBATCH -N 2
 #SBATCH -c16
 #SBATCH -C epyc
-##SBATCH --exclusive
 
 function usage() {
     printf '%b\n' "${BOLD}NAME${END}
