@@ -159,6 +159,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
             CREATE TABLE IF NOT EXISTS file (
                 relative_path TEXT NOT NULL,
                 mode INT NOT NULL,
+                owner TEXT,
                 mod_time INT NOT NULL,
                 file_size INT NOT NULL,
                 content_hash TEXT,
@@ -228,30 +229,6 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
         sha256 = self.sha256_checksum(filepath)
         return permissions, p.owner(), p.group(), mtime, size, sha256
 
-    def db_add_row(self, filepath, base_path):
-
-        perms, owner, group, mtime, size, sha256 = self.get_file_info(filepath)
-
-        # TODO: figure out which if any of these are unnecessary
-        filepath = str(filepath)
-        perms = int(perms)
-        mtime = int(mtime)
-        size = int(size)
-        sha256 = str(sha256)
-        base_path = str(base_path)
-
-        # the filepath will start with the base_path
-        filepath = str(filepath)[len(base_path):]
-        if filepath[0] == '/':
-            filepath = filepath[1:]
-
-        self.cursor.execute("""
-            INSERT INTO file (relative_path, mode, mod_time, file_size, content_hash, base_path)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (str(filepath), int(perms), int(mtime), int(size), sha256, base_path))
-
-        return [filepath, perms, mtime, size, sha256, base_path]
-
     def db_save(self):
         
         # Commit the changes
@@ -283,18 +260,18 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
 
         for row in file_tbl:
             
-            file_ins_query = "INSERT OR REPLACE INTO file (relative_path, mode, mod_time, file_size, content_hash, base_path) VALUES (?, ?, ?, ?, ?, ?) ", [row[1]] + [file_tbl[row][column] for column in file_tbl[row]] + [row[0]]
+            file_ins_query = "INSERT OR REPLACE INTO file (relative_path, mode, owner, mod_time, file_size, content_hash, base_path) VALUES (?, ?, ?, ?, ?, ?, ?) ", [row[1]] + [file_tbl[row][column] for column in file_tbl[row]] + [row[0]]
             self.cursor.execute(file_ins_query[0], file_ins_query[1])
 
         self.db_save()
 
     def tbl_add_row(self, relative_path, base_path):
 
-        perms, owner, group, mtime, size, sha256 = self.get_file_info(relative_path)
+        perms, user, group, mtime, size, sha256 = self.get_file_info(relative_path)
 
-        # TODO: figure out which if any of these are unnecessary
         relative_path = str(relative_path)
         perms = int(perms)
+        owner = f"{user}:{group}"
         mtime = int(mtime)
         size = int(size)
         sha256 = str(sha256)
@@ -305,13 +282,9 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
         if relative_path[0] == '/':
             relative_path = relative_path[1:]
 
-        result = {'mode': perms, 'mod_time': mtime, 'file_size': size, 'content_hash': sha256}
+        result = {'mode': perms, 'owner': owner, 'mod_time': mtime, 'file_size': size, 'content_hash': sha256}
 
         return result
-
-    def create_baseline(self, filepath):
-        # filepath can be either a file or a directory
-        pass
 
     def signal_handler(self, signum, frame):
         signame = signal.Signals(signum).name
@@ -531,10 +504,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
                 # # using resolve here means that if two packages point to eachother, there will only be one entry
                 # # not doing so, means that they are treated like entirely unique directories
                 fpath = str(pathlib.Path(fpath).resolve())
-                d1, d2 = fpath.split('/')[-2:]
-                if d1 == 'modulefiles' or \
-                   d2 == 'modulefiles' or \
-                   not pathlib.Path(fpath).is_dir():
+                if not pathlib.Path(fpath).is_dir():
                     continue
                 if (fpath not in self.config['general']['base']) and (fpath not in seen_paths):
                     seen_paths.add(fpath)
@@ -653,10 +623,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
                 # # using resolve here means that if two packages point to eachother, there will only be one entry
                 # # not doing so, means that they are treated like entirely unique directories
                 # fpath = str(pathlib.Path(fpath).resolve())
-                d1, d2 = fpath.split('/')[-2:]
-                if d1 == 'modulefiles' or \
-                   d2 == 'modulefiles' or \
-                   not pathlib.Path(fpath).is_dir():
+                if not pathlib.Path(fpath).is_dir():
                     continue
                 if (fpath not in self.config['general']['base']) and (fpath not in seen_paths):
                     seen_paths.add(fpath)

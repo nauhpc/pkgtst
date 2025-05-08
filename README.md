@@ -32,11 +32,22 @@ It does this with three types of software tests:
     export PKGTST_ROOT=/path/to/my/pkgtst
     ```
 
-2. We highly recommend installing this package in a python venv:
+2. Environment setupy
+
+    We highly recommend installing this package in a python venv:
 
     ```
     python3 -m venv ./p-env
     . ./p-env/bin/activate
+    ```
+    
+    You can consider making an Lmod modulefile too, which would load and unload this venv:
+    ```
+	-- -*- pkgtst 0.2.0 -*- --
+	whatis("Description: Provides pkgtst, version 0.2.0")
+	execute{cmd=". /path/to/pkgtst/p-env/bin/activate", modeA={"load"}}
+	execute{cmd="deactivate", modeA={"unload"}}
+    setenv("PKGTST_ROOT","/path/to/pkgtst")
     ```
 
 3. Then install with pip:
@@ -50,7 +61,7 @@ It does this with three types of software tests:
     # 3. adds PKGTST_ROOT setting to the ./p-env/bin/activate script
     #    - if you don't run the post-install script, you'll still need the
     #      PKGTST_ROOT env var setting (example:
-    #      `export PKGTST_ROOT='/scratch/billy/pkgtst-repro/pkgtst'`)
+    #      `export PKGTST_ROOT='/path/to/pkgtst'`)
     
     ./post-install
     ```
@@ -65,7 +76,7 @@ It does this with three types of software tests:
     # view all discoverable packages, verify configuration
     pkgtst enumerate
     ```
-
+    
     For example, if you were to use the default configuration, and your directory try looked like this:
     
     ```
