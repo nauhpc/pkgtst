@@ -58,7 +58,6 @@ It does this with three types of software tests:
     #    - if you don't run the post-install script, you'll still need the
     #      PKGTST_ROOT env var setting (example:
     #      `export PKGTST_ROOT='/path/to/pkgtst'`)
-    
     ./post-install
     ```
 
