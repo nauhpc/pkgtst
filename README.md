@@ -63,16 +63,14 @@ It does this with three types of software tests:
 
 4. Review the default configuration in `./etc/pkgtst.yaml`
 
-    The most important parts are the `[general][base]` and `[general][hierarchy]` settings. The former should point to the base of a package tree. We set this to be the base of our package tree for our loadable [Lmod](https://github.com/TACC/Lmod) modules. The latter setting should match your file system hierarchy. Once you have this set to your liking move on to the next step.
-    
-    You'll also want to replace the placeholder values, namely: `[fileint][dbfile]`, `[general][email]`, and `[report_gen][rendered_html]`.
+    The most important parts are the `[general][base]` and `[general][hierarchy]` settings. The former should point to the base of a package tree. We set this to be the base of our package tree for our loadable [Lmod](https://github.com/TACC/Lmod) modules. The latter setting should match your file system hierarchy. Also, edit the placeholder value for `[general][email]`. Once you have this set to your liking move on to the next step.
     
     ```
     # view all discoverable packages, verify configuration
     pkgtst enumerate
     ```
     
-    For example, if you were to use the default configuration, and your directory try looked like this:
+    For example, if you were to use the default configuration, and your directory looked like this:
     
     ```
     /packages/python/3.13.3
