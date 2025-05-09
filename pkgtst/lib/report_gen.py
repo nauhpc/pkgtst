@@ -452,7 +452,8 @@ DELETE FROM ct_results WHERE ROWID IN (
             cursor.execute('SELECT * FROM ct_results')
             data = cursor.fetchall()
             data = [dict(row) for row in data]
-
+            cursor.close()
+            conn.close()
         else:
            self.logger.log(LogLevel.VERBOSE, f"Results sqlite file not found at {self.dbfile}, have you executed any custom tests yet?")
            data = []
@@ -471,8 +472,6 @@ DELETE FROM ct_results WHERE ROWID IN (
 
         data = sorted(data, key=lambda x: (x['test_name'], x['variant'], x['datetime']), reverse=True)
 
-        cursor.close()
-        conn.close()
         return data
 
     def render_data(self, data, template_path=None):
