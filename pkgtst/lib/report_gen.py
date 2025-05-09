@@ -449,9 +449,14 @@ DELETE FROM ct_results WHERE ROWID IN (
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            cursor.execute('SELECT * FROM ct_results')
-            data = cursor.fetchall()
-            data = [dict(row) for row in data]
+            try:
+                cursor.execute('SELECT * FROM ct_results')
+                data = cursor.fetchall()
+                data = [dict(row) for row in data]
+            except sqlite3.OperationalError:
+                self.logger.log(LogLevel.VERBOSE, f"Failed to query the ct_results table, have you executed any custom tests yet?")
+                data = []
+                
             cursor.close()
             conn.close()
         else:
@@ -474,7 +479,7 @@ DELETE FROM ct_results WHERE ROWID IN (
 
         return data
 
-    def render_data(self, data, template_path=None):
+    def render_data(self, data, ct_data, template_path=None):
 
         summary = dict()
 
@@ -529,8 +534,6 @@ DELETE FROM ct_results WHERE ROWID IN (
             return hashlib.sha256(value.encode('utf-8')).hexdigest()
         env.filters['hash'] = sha256_hash
         template = env.get_template(basename)
-
-        ct_data = self.get_ct_data()
 
         seen_cts = set()
 
@@ -652,8 +655,31 @@ DELETE FROM ct_results WHERE ROWID IN (
             header = []
 
         if render_jinja:
+
+            ct_data = self.get_ct_data()
+
+            if limit_per is not None:
+            # indices[(component1, component2, ...)] = <list-of-valid-indices>
+                # rm_indices = <set-of-indices-to-remove>
+                indices = dict()
+                rm_indices = set()
+                for i in range(len(ct_data)):
+                    row = ct_data[i]
+                    key = tuple([row['test_name'], row['variant']])
+                    if key not in indices:
+                        indices[key] = [i]
+                    else:
+                        # is there a potential for smarter filters here?
+                        if len(indices[key]) >= limit_per:
+                            rm_indices.add(i)
+                        else:
+                            indices[key].append(i)
+                ct_data = [ct_data[i] for i in range(len(ct_data)) if i not in rm_indices]
+
+            if limit is not None:
+                ct_data = ct_data[0:limit]
             
-            self.render_data(data, template_path=template_path)
+            self.render_data(data, ct_data, template_path=template_path)
             
         else:
             
@@ -706,6 +732,9 @@ DELETE FROM ct_results WHERE ROWID IN (
         self.pprint_table_helper(self.warn_only)
 
     def print_ct_table(self, test_name=None, parsable=None, field_delimiter='|', limit_per=None):
+
+        if limit_per is None and self.output_limit_per is not None:
+            limit_per = self.output_limit_per
 
         ct_data = self.get_ct_data()
 
