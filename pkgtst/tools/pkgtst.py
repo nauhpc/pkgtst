@@ -87,7 +87,9 @@ def do_test(package_id_string, do_reset=False, config_path=None):
     # 3. run lnfs against the root dir of the package
     mlc = MissingLibScanner(config=config_path)
     pkg_base_paths = fi.get_filter_matches(filters)
-    if len(pkg_base_paths) != 1:
+    if len(pkg_base_paths) == 0:
+        logger.log(LogLevel.ERROR, f'pkg_base_path resolution failed for package_id {package_id_string}, use "pkgtst enumerate" to list valid package_ids')
+    elif len(pkg_base_paths) > 1:
         logger.log(LogLevel.ERROR, f"pkg_base_path resolution ambiguous for package_id {package_id_string}, cannot proceed, revise the config file (possible hierarchy settings mistake, or a path needs to be added to ignore_paths)")
     lib_scan_results = mlc.scan(pkg_base_paths, ld_lib_path)
 

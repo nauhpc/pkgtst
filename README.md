@@ -39,10 +39,10 @@ It does this with three types of software tests:
     
     You can consider making an Lmod modulefile too, which would load and unload this venv:
     ```
-	-- -*- pkgtst 0.2.0 -*- --
-	whatis("Description: Provides pkgtst, version 0.2.0")
-	execute{cmd=". /path/to/pkgtst/p-env/bin/activate", modeA={"load"}}
-	execute{cmd="deactivate", modeA={"unload"}}
+    -- -*- pkgtst 0.2.0 -*- --
+    whatis("Description: Provides pkgtst, version 0.2.0")
+    execute{cmd=". /path/to/pkgtst/p-env/bin/activate", modeA={"load"}}
+    execute{cmd="deactivate", modeA={"unload"}}
     setenv("PKGTST_ROOT","/path/to/pkgtst")
     ```
 
@@ -134,7 +134,7 @@ It does this with three types of software tests:
     # `[report_gen][rendered_html]` parameter of the config file)
     pkgtst report --render-jinja
     
-    # render an a different jinja template by specifying the path
+    # render a different jinja template by specifying the path
     pkgtst report --template-path ./etc/templates/static-table-wo-dates.html
     ```
 
@@ -204,7 +204,7 @@ It does this with three types of software tests:
 		script: stream.sh
 		yaml: None
 		variants: None
-    $
+    $ 
     ```
     
     So to fill in "epyc" for that Slurm feature, we'd use this config:

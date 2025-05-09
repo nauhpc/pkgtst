@@ -576,19 +576,7 @@ base_path TEXT NOT NULL PRIMARY KEY,"""
 
             file_set = set([diff['row'] for diff in file_tbl_diffs])
 
-            print("==== RESULTS ====")
-
-            if len(fileint_tbl_diffs) == 0:
-                print("fileint_tbl [ OK ]")
-            else:
-                print("fileint_tbl [FAIL]")
-
-            if len(file_tbl_diffs) == 0:
-                print("file_tbl [ OK ]")
-            else:
-                print("file_tbl [FAIL]")
-
-            print(f"files different from the baseline: {len(file_set)} (out of {len(file_tbl)})")
+            self.logger.log(LogLevel.INFO, f"Files different from the baseline: {len(file_set)} (out of {len(file_tbl)})")
 
         return fileint_tbl, file_tbl, fileint_tbl_diffs, file_tbl_diffs
 

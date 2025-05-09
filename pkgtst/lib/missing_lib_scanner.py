@@ -79,7 +79,7 @@ class MissingLibScanner:
         results = []
 
         for filepath in filepaths:
-            print(f"filepath: {filepath}")
+            self.logger.log(LogLevel.VERBOSE, f"filepath: {filepath}")
             if os.path.exists(filepath):
                 if os.path.isdir(filepath):
                     directory = filepath
