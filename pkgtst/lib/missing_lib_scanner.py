@@ -5,7 +5,11 @@ import subprocess
 import re
 from multiprocessing import Pool
 import sys
+import shlex
 
+from pkgtst.lib.logger import Logger
+from pkgtst.lib.logger import LogLevel
+from pkgtst.lib.utils import get_pkgtst_root
 
 class MissingLibScanner:
 
@@ -14,18 +18,20 @@ class MissingLibScanner:
         if config:
             self.config_path = config
         else:
-            self.config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'etc', 'missing_lib_scanner.yaml')
+            self.config_path = os.path.join(get_pkgtst_root(), 'etc', 'missing_lib_scanner.yaml')
         
         self.cpu_cores = 4
         self.verbose = False
-        self.debug = False
         self.elf_magic_number = bytes.fromhex('7f454c46')
         self.ld_library_path = None
-        self.silent = False
+
+        self.logger = Logger(config_path=config)
 
     def check_libs(self, filepath):
         command = ["ldd", "--", filepath]
 
+        self.logger.log(LogLevel.TRACE, f"self.ld_library_path = {shlex.quote(self.ld_library_path)}")
+        
         if self.ld_library_path is None:
             result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, universal_newlines=True)
         else:
@@ -58,13 +64,11 @@ class MissingLibScanner:
 
     def process_filepath(self, filepath):
         is_elf = self.is_elf(filepath)
-        if not self.silent:
-            print(f"{filepath} is_elf: {is_elf}")
+        self.logger.log(LogLevel.VERBOSE, f"{filepath} is_elf: {is_elf}")
         if(is_elf):
             bad_libs = self.check_libs(filepath)
             for bad_lib in bad_libs:
-                if not self.silent:
-                    print(f"library {bad_lib} is missing for ELF executable {filepath}")
+                self.logger.log(LogLevel.INFO, f"library {bad_lib} is missing for ELF executable {filepath}")
             return bad_libs
 
     def scan(self, filepaths, ld_library_path=None):
@@ -75,7 +79,7 @@ class MissingLibScanner:
         results = []
 
         for filepath in filepaths:
-            print(f"filepath: {filepath}")
+            self.logger.log(LogLevel.VERBOSE, f"filepath: {filepath}")
             if os.path.exists(filepath):
                 if os.path.isdir(filepath):
                     directory = filepath
@@ -98,6 +102,3 @@ class MissingLibScanner:
         self.ld_library_path = old_ld_library_path
 
         return results
-
-    def set_silent(self, setting):
-        self.silent = setting

@@ -1,7 +1,11 @@
+custom_test:
+  output_dir: /path/to/pkgtst/var/custom_test/output
+  results_dir: /path/to/pkgtst/var/custom_test/results
+  script_dir: /path/to/pkgtst/var/custom_test/scripts
 fileint:
-  dbfile: /path/to/my/fileint.sql
+  array_task_throttle: 16
+  dbfile: /path/to/pkgtst/var/db/fileint.sql
   debug: true
-  debug_level: null
   diff_hierarchy: true
   follow_symlinks: true
   format: sqlite3
@@ -14,9 +18,19 @@ fileint:
 general:
   base:
   - /packages
-  hierarchy: '{package_name}/{package_version}'
-  path_limit: /packages
+  debug_level: WARNING
   email: noreply@example.com
+  hierarchy: '{package_name}/{package_version}'
+  ignore_paths: null
+  path_limit: /packages
 report_gen:
-  dbfile: /path/to/my/results.sql
-  rendered_html: /path/to/my/results.html
+  ct_warn_only: []
+  dbfile: /path/to/pkgtst/var/db/results.sql
+  output_limit_per: 5
+  rendered_html: /path/to/pkgtst/reports/results.html
+  retention: 100 runs
+  warn_only: null
+slurm_runner:
+  array_task_throttle: 16
+  output_dir: /path/to/pkgtst/var/log
+  req_constraints: []

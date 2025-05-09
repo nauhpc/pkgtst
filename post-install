@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+
+import os
+import yaml
+import sys
+import shlex
+import argparse
+import shlex
+
+if __name__ == '__main__':
+
+    own_path = os.path.abspath(__file__)
+    base_dir = os.path.dirname(own_path)
+    print(f"base_dir: {base_dir}")
+
+    parser = argparse.ArgumentParser(description='post-install - sets paths in config file, creating dirs where necessary')
+    parser.add_argument('-c', '--config-path', type=str, default=f"{base_dir}/etc/pkgtst.yaml", help='The config file to edit, if not set will attempt to use ./etc/pkgtst.yaml relative to this script')
+    parser.add_argument('-e', '--venv', type=str, default=f"{base_dir}/p-env", help='The python venv directory (the dir specified with the for example: \'python3 -m venv ./MY_VENV_NAME\')')
+    args = parser.parse_args()
+
+    if not os.path.exists(args.config_path):
+        sys.stderr.write(f"{args.config_path} does not exist!")
+    else:
+
+        var_path = os.path.join(base_dir, 'var')
+        ct_path = os.path.join(var_path, 'custom_test')
+
+        dirs = [
+            os.path.join(base_dir, 'var'),
+            os.path.join(base_dir, 'var', 'db'),
+            os.path.join(base_dir, 'var', 'custom_test'),
+            os.path.join(base_dir, 'var', 'custom_test', 'scripts'),
+            os.path.join(base_dir, 'var', 'custom_test', 'output'),
+            os.path.join(base_dir, 'var', 'custom_test', 'results'),
+            os.path.join(base_dir, 'var', 'log'),
+            os.path.join(base_dir, 'var', 'log', 'arrays'),
+            os.path.join(base_dir, 'var', 'log', 'tests'),
+            os.path.join(base_dir, 'var', 'log', 'render_jobs'),
+            os.path.join(base_dir, 'reports')
+        ]
+
+        for d in dirs:
+            if os.path.exists(d):
+                sys.stdout.write(f"The directory {shlex.quote(d)} already exists\n")
+            else:
+                os.mkdir(d)
+                sys.stdout.write(f"Created {shlex.quote(d)}\n")
+        
+        fp = open(args.config_path, 'r')
+        config_data = yaml.safe_load(fp)
+
+        config_data['fileint']['dbfile'] = os.path.join(base_dir, 'var', 'db', 'fileint.sql')
+        config_data['report_gen']['dbfile'] = os.path.join(base_dir, 'var', 'db', 'results.sql')
+        config_data['report_gen']['rendered_html'] = os.path.join(base_dir, 'reports', 'results.html')
+        config_data['custom_test']['script_dir'] = os.path.join(base_dir, 'var', 'custom_test', 'scripts')
+        config_data['custom_test']['output_dir'] = os.path.join(base_dir, 'var', 'custom_test', 'output')
+        config_data['custom_test']['results_dir'] = os.path.join(base_dir, 'var', 'custom_test', 'results')
+        config_data['slurm_runner']['output_dir'] = os.path.join(base_dir, 'var', 'log')
+
+        with open(args.config_path, 'w') as fp:
+            yaml.dump(config_data, fp, default_flow_style=False)
+
+        sys.stdout.write(f"Set paths in {args.config_path}\n")
+
+    activate_script = f"{args.venv}/bin/activate"
+    export_cmd = f"export PKGTST_ROOT={shlex.quote(base_dir)}"
+
+    if not os.path.exists(activate_script):
+        sys.stderr.write(f'Venv activate script not found at {activate_script}, either re-run this script with "-e path/to/venv" or incorporate {export_cmd} into your workflow elsewhere\n')
+    else:
+    
+        skip_export_cmd = False
+
+        with open(activate_script, 'r') as fp:
+            lines = fp.readlines()
+            last_line = lines[-1].rstrip()
+            if last_line == export_cmd:
+                skip_export_cmd = True
+
+        if not skip_export_cmd:
+            with open(activate_script, 'a') as fp:
+                fp.write(f"{export_cmd}\n")
+            sys.stdout.write(f"Appended {export_cmd} to {activate_script}\n")
+            sys.stdout.write(f"Note: edited venv to include PKGTST_ROOT setting, reactivate the venv to edit the current shell environment\n")

@@ -1,35 +1,51 @@
 <!DOCTYPE html>
+<!-- hello there -->
 <html lang="en">
   <head>
     <meta charset="UTF-8">
-    <title>Jinja2 Table Example</title>
+    <title>Pkgtst Report</title>
     <style>
-        table {
+       table {
             border-collapse: collapse;
             margin-bottom: 40px;
+            width: 100%;
         }
         th, td {
             border: 1px solid black;
             padding: 8px;
-            /* text-align: left; */
+            text-align: left;
         }
         caption {
             border: 1px solid black;
             border-bottom: none; /* To avoid double border with the table */
             padding: 8px;
-            /* text-align: center; */
+            text-align: center;
         }
-        tr:nth-child(even) {
-            background-color: #d3d3d3
+        tr[data-packageid], tr[data-ctid] {
+            background-color: #d3d3d3;
         }
-        tr:nth-child(odd) {
-            background-color: white;
+        .accordion-button {
+            background-color: #eee;
+            color: #444;
+            cursor: pointer;
+            padding: 5px 10px;
+            font-size: 14px;
+            border: none;
+            outline: none;
+        }
+        .accordion-button:hover {
+            background-color: #ccc;
         }
     </style>
   </head>
   <body>
+    <h1>
+      Results Summary (Updated: {{ summary['updated'] }})<br>
+    </h1>
     <table>
-      <caption>Test Summary (Last Run: {{ summary['last_run'] }})</caption>
+      <caption>
+        Last Run Statistics
+      </caption>
       <thead>
         <th>Test Name</th>
         <th>Failed (Count)</th>
@@ -38,20 +54,74 @@
       <tbody>
         <tr>
           <td>File Integrity</td>
-          <td>{{ summary['fileint_fail_count'] }}</td>
-          <td>{{ "%.2f" | format(summary['fileint_fail_percentage']) }}</td>
+          <td>{{ summary['fileint']['fail'] }} out of {{ summary['fileint']['total'] }} packages</td>
+          {% if summary['fileint']['total'] > 0 %}
+          <td>{{ "%.2f" | format(100 * summary['fileint']['fail'] / summary['fileint']['total']) }}</td>
+          {% else %}
+          <td>N/A</td>
+          {% endif %}
         </tr>
         <tr>
           <td>Missing Lib Scan</td>
-          <td>{{ summary['lnfs_fail_count'] }}</td>
-          <td>{{ "%.2f" | format(summary['lnfs_fail_percentage']) }}</td>
+          <td>{{ summary['lnfs']['fail'] }} out of {{ summary['lnfs']['total'] }} packages</td>
+          {% if summary['lnfs']['total'] > 0 %}
+          <td>{{ "%.2f" | format(100 * summary['lnfs']['fail'] / summary['lnfs']['total'])}}</td>
+          {% else %}
+          <td>N/A</td>
+          {% endif %}
+        </tr>
+        <tr>
+          <td>Custom Tests</td>
+          <td>{{ summary['ct']['fail'] }} out of {{ summary['ct']['total'] }} custom tests</td>
+          {% if summary['ct']['total'] > 0 %}
+          <td>{{ "%.2f" | format(100 * summary['ct']['fail'] / summary['ct']['total']) }}</td>
+          {% else %}
+          <td>N/A</td>
+          {% endif %}
         </tr>
       </tbody>
     </table>
-    <table>
-      <caption>Test Results</caption>
+    <table id="ct-results">
+      <caption>Custom Test Results</caption>
+      <thead>
+        <th>Datetime</th>
+        <th>Test Name</th>
+        <th>Variant</th>
+        <th>Passed</th>
+      </thead>
+      <tbody>
+      {% set ps = namespace(last_test_name=None, last_variant=None, ctid=None) %}
+      {% for row in ct_data %}
+        {% if row.test_name != ps.last_test_name or row.variant != ps.last_variant %}
+        <tr>
+            {% set ps.last_test_name = row.test_name %}
+            {% set ps.last_variant = row.variant %}
+            {% set ps.ctid = (ps.last_test_name ~ ps.last_variant) | hash %}
+            <td>{{ row.datetime }} <button class="accordion-button" onclick="ctToggleRows('{{ ps.ctid }}', this)">Expand Trials</button></td>
+        {% else %}
+        <tr data-ctid="{{ ps.ctid }}" style="display: none;">
+            <td>{{ row.datetime }}</td>
+        {% endif %}
+          <td>{{ row.test_name }}</td>
+          <td>{{ row.variant }}</td>
+          {% if row.passed %}
+          <td style="background-color: green; color: white">PASS</td>
+          {% else %}
+            {% if row.warn_only %}
+            <td style="background-color: yellow; color: black">WARNING</td>
+            {% else %}
+            <td style="background-color: red; color: white">FAIL</td>
+            {% endif %}
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <table id="results">
+      <caption>Package Test Results</caption>
       <thead>
         <tr>
+          <th>Datetime</th>
           <th>Package Name</th>
           <th>Package Version</th>
           <th>Package Base</th>
@@ -61,8 +131,18 @@
         </tr>
       </thead>
       <tbody>
-        {% for row in data %}
+      {% set ns = namespace(last_package_name=None, last_package_version=None, packageid=None) %}
+      {% for row in data %}
+        {% if row.package_name != ns.last_package_name or row.package_version != ns.last_package_version %}
         <tr>
+            {% set ns.last_package_name = row.package_name %}
+            {% set ns.last_package_version = row.package_version %}
+            {% set ns.packageid = (ns.last_package_name ~ ns.last_package_version) | hash %}
+            <td>{{ row.datetime }} <button class="accordion-button" onclick="toggleRows('{{ ns.packageid }}', this)">Expand Trials</button></td>
+        {% else %}
+        <tr data-packageid="{{ ns.packageid }}" style="display: none;">
+            <td>{{ row.datetime }}</td>
+        {% endif %}
           <td>{{ row.package_name }}</td>
           <td>{{ row.package_version }}</td>
           <td>{{ row.package_base }}</td>
@@ -78,9 +158,11 @@
             PASS
           </td>
           {% else %}
-          <td style="background-color: red; color: white">
-            FAIL
-          </td>
+            {% if row.warn_only %}
+          <td style="background-color: yellow; color: black">WARNING</td>
+            {% else %}
+          <td style="background-color: red; color: white">FAIL</td>
+            {% endif %}
           {% endif %}
           {% if row.passed_lnfs %}
           <td style="background-color: green; color: white">
@@ -88,13 +170,9 @@
           </td>
           {% else %}
             {% if row.warn_only %}
-          <td style="background-color: yellow; color: black">
-            WARNING
-          </td>
+          <td style="background-color: yellow; color: black">WARNING</td>
             {% else %}
-          <td style="background-color: red; color: white">
-            FAIL
-          </td>
+          <td style="background-color: red; color: white">FAIL</td>
             {% endif %}
           {% endif %}
         </tr>
@@ -102,4 +180,145 @@
       </tbody>
     </table>
   </body>
+  <script>
+    // Function to toggle rows of a given package name and update button text
+    function toggleRows(packageid, button) {
+        const rows = document.querySelectorAll(`[data-packageid="${packageid}"]`);
+        let isExpanded = false;
+
+        rows.forEach(row => {
+            if (row.style.display === 'none' || row.style.display === '') {
+                row.style.display = 'table-row';
+                isExpanded = true;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Update button text based on the current state
+        const buttonText = button.textContent.split(' ');
+        if (buttonText[0] === 'Expand') {
+            buttonText[0] = 'Collapse';
+        } else {
+            buttonText[0] = 'Expand';
+        }
+        button.textContent = buttonText.join(' ');
+    }
+
+    function ctToggleRows(ctid, button) {
+        const rows = document.querySelectorAll(`[data-ctid="${ctid}"]`);
+        let isExpanded = false;
+
+        rows.forEach(row => {
+            if (row.style.display === 'none' || row.style.display === '') {
+                row.style.display = 'table-row';
+                isExpanded = true;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Update button text based on the current state
+        const buttonText = button.textContent.split(' ');
+        if (buttonText[0] === 'Expand') {
+            buttonText[0] = 'Collapse';
+        } else {
+            buttonText[0] = 'Expand';
+        }
+        button.textContent = buttonText.join(' ');
+    }
+
+    window.addEventListener('load', () => {
+        console.log('The page has fully loaded');
+        
+        const table = document.getElementById('results');
+        if (!table) {
+            console.error('Table with ID "results" not found.');
+            return;
+        }
+
+        const rows = table.rows;
+        const freq = {};
+        // populate freq array (holds the number of occurrences of each data-packageid value)
+        for (const row of rows) {
+            const pkgid = row.getAttribute('data-packageid');
+            if(pkgid) {
+                if(freq[pkgid] === undefined) {
+                    
+                    freq[pkgid] = 1;
+                }
+                else {
+                    freq[pkgid]++;
+                }
+            }
+        }
+
+        for(const row of rows) {
+            const firstCell = row.querySelector('td');
+            
+            if (firstCell) {
+                const button = firstCell.querySelector('button');
+                
+                if (button) {
+                    const onclickValue = button.getAttribute('onclick');
+                    
+                    if (onclickValue) {
+                        const pkgid = onclickValue.substring(12, 76);
+                        if(freq[pkgid] !== undefined) {
+                            button.textContent += ` (${freq[pkgid]})`;
+                        }
+                        else {
+                            button.textContent += ` (0)`;
+                        }
+                    }
+                }
+            }            
+        }
+    });
+
+    window.addEventListener('load', () => {
+        console.log('The page has fully loaded');
+        
+        const table = document.getElementById('ct-results');
+        if (!table) {
+            console.error('Table with ID "ct-results" not found.');
+            return;
+        }
+
+        const rows = table.rows;
+        const freq = {};
+        // populate freq array (holds the number of occurrences of each data-ctid value)
+        for (const row of rows) {
+            const ctid = row.getAttribute('data-ctid');
+            if (ctid) {
+                if (freq[ctid] === undefined) {
+                    freq[ctid] = 1;
+                } else {
+                    freq[ctid]++;
+                }
+            }
+        }
+
+        for (const row of rows) {
+            const firstCell = row.querySelector('td');
+            
+            if (firstCell) {
+                const button = firstCell.querySelector('button');
+                
+                if (button) {
+                    const onclickValue = button.getAttribute('onclick');
+                    
+                    if (onclickValue) {
+                        const ctid = onclickValue.substring(14, 78);
+                        if (freq[ctid] !== undefined) {
+                            button.textContent += ` (${freq[ctid]})`;
+                        } else {
+                            button.textContent += ` (0)`;
+                        }
+                    }
+                }
+            }            
+        }
+    });
+  </script>
 </html>

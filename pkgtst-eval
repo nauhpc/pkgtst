@@ -1,0 +1,334 @@
+#!/bin/bash
+
+function die() {
+    local msg="$1"
+    local -i exit="$2"
+    printf 'ERROR: %s\n' "$msg" 1>&2
+    exit "$exit"
+}
+
+function usage() {
+    printf '%b\n' "${BOLD}NAME${END}
+    ${SCRIPT_NAME}
+
+${BOLD}DESCRIPTION${END}
+    Evaluates test results and sends out emails if a failure threshold is
+    exceeded
+
+${BOLD}OPTIONS${END}
+    -h, --help        print this help message
+
+    -n N, --number=N  failed test threshold, if this number is met or exceeded,
+                      this script will email the specified addresses (default:
+                      1)
+
+    -l LIMIT_PER, --limit-per=LIMIT_PER
+                      Look back at the last LIMIT_PER number of test for each
+                      test case (default: 1)
+
+    -e ADDR, --email=ADDR
+                      send any necessary email alerts to this address (can
+                      specify this option multiple times for multiple email
+                      addresses)
+
+    -p, --pkg-only
+                      Only review package test results
+
+    -c, --ct-only     Only review custom test runs
+
+    -t, --test-mode   print any email messages to console instead of emailing"
+}
+
+function pprint_fails() {
+    local i
+    local j
+    local row
+    local value
+    local row_length
+
+    row_length="${#FIELDSR[@]}"
+
+    # print header
+    row=
+    for((i=1; i <= row_length; i++)); do
+        if [[ -z "$row" ]]; then
+            row="${FIELDSR[$i]}"
+        else
+            row="$row|${FIELDSR[$i]}"
+        fi
+    done
+    printf '%s\n' "$row"
+
+    # print table
+    for((i=1;i <= SIZE; i++)); do
+        row=
+
+        for((j=1; j <= row_length; j++)); do
+           
+            key="$i:${FIELDSR[$j]}"
+            # echo "key=${key}"
+            if [[ -v "${FAILS[$key]}" ]]; then
+                break
+            fi
+            value="${FAILS[$key]}"
+            if [[ -z "$row" ]]; then
+                row="$value"
+            else
+                row="$row|$value"
+            fi
+
+        done
+        printf '%s\n' "$row"
+    done
+    
+}
+
+function pprint_ct_fails() {
+    local i
+    local j
+    local row
+    local value
+    local row_length
+
+    row_length="${#CT_FIELDSR[@]}"
+
+    # print header
+    row=
+    for((i=1; i <= row_length; i++)); do
+        if [[ -z "$row" ]]; then
+            row="${CT_FIELDSR[$i]}"
+        else
+            row="$row|${CT_FIELDSR[$i]}"
+        fi
+    done
+    printf '%s\n' "$row"
+
+    # print table
+    for((i=1;i <= CT_SIZE; i++)); do
+        row=
+
+        for((j=1; j <= row_length; j++)); do
+            
+            key="$i:${CT_FIELDSR[$j]}"
+            # echo "key=${key}"
+            if [[ -v "${CT_FAILS[$key]}" ]]; then
+                break
+            fi
+            value="${CT_FAILS[$key]}"
+            if [[ -z "$row" ]]; then
+                row="$value"
+            else
+                row="$row|$value"
+            fi
+
+        done
+        printf '%s\n' "$row"
+    done    
+}
+
+function parse_fails() {
+
+    local OLDIFS
+    local LINE
+    local read_header
+    local i
+
+    read_header=0
+    SIZE=0
+    OLDIFS="$IFS"
+
+    # PACKAGE TEST FAILS VARS -- START
+
+    # FIELDS[<field_name>]=<col_index> (col_index from 1)
+    declare -g -A FIELDS
+    # FIELDS[<col_index>]=<field_name> (col_index starts from 1)
+    declare -g -A FIELDSR
+    # FAILS[<row_number>:<field_name>]=<value> (row_number starts from 1)
+    declare -g -A FAILS
+    SIZE=0
+
+    # PACKAGE TEST FAILS VARS -- END
+
+    # PACKAGE CUSTOM_TEST FAILS VARS -- START
+
+    # CT_FIELDS[<field_name>]=<col_index> (col_index from 1)
+    declare -g -A CT_FIELDS
+    # FIELDS[<col_index>]=<field_name> (col_index starts from 1)
+    declare -g -A CT_FIELDSR
+    # FAILS[<row_number>:<field_name>]=<value> (row_number starts from 1)
+    declare -g -A CT_FAILS
+    CT_SIZE=0
+
+    # PACKAGE CUSTOM_TEST FAILS VARS -- END
+
+    if [[ "$CT_ONLY" != 1 ]]; then
+        
+        # for package tests
+        IFS='|'
+        while IFS= read -r LINE; do
+            set -- $LINE
+
+            if [[ "$read_header" != 1 ]]; then
+                i=1
+                while [[ "$#" -gt 0 ]]; do
+                    FIELDS["$1"]="$i"
+                    FIELDSR["$i"]="$1"
+                    ((i++))
+                    shift
+                done
+                read_header=1
+            else
+
+                set -- "$@"
+
+                if [[ "${!FIELDS[warn_only]}" = True ]] || \
+                       [[ "${!FIELDS[passed_fileint]}" = 1 && \
+                              "${!FIELDS[passed_lnfs]}" = 1 ]]; then
+                    continue
+                fi
+
+                for field in "${!FIELDS[@]}"; do
+                    value="${!FIELDS[$field]}"
+                    FAILS["$SIZE":"$field"]="$value"
+                done
+                ((SIZE++))
+
+            fi
+
+        done < <(pkgtst report --limit-per="$LIMIT_PER" --parsable 2> /dev/null)
+
+    fi
+
+    if [[ "$PKG_ONLY"  != 1 ]]; then
+
+        # for custom tests
+        read_header=0
+        IFS='|'
+        while IFS= read -r LINE; do
+            set -- $LINE
+
+            if [[ "$read_header" != 1 ]]; then
+                i=1
+                while [[ "$#" -gt 0 ]]; do
+                    CT_FIELDS["$1"]="$i"
+                    CT_FIELDSR["$i"]="$1"
+                    ((i++))
+                    shift
+                done
+                read_header=1
+            else
+
+                set -- "$@"
+
+                if [[ "${!CT_FIELDS[warn_only]}" = True ]] || \
+                       [[ "${!CT_FIELDS[passed]}" = 1 ]]; then
+                    continue
+                fi
+
+                for field in "${!CT_FIELDS[@]}"; do
+                    value="${!CT_FIELDS[$field]}"
+                    CT_FAILS["$CT_SIZE":"$field"]="$value"
+                done
+                ((CT_SIZE++))
+
+            fi
+
+        done < <(pkgtst custom_test --print --parsable --limit-per="$LIMIT_PER" 2> /dev/null)
+
+    fi
+
+    IFS="$OLDIFS"
+
+}
+
+readonly BOLD=$"\033[1m"
+readonly END=$"\033[0m"
+
+IFS= read -rd '' SCRIPT_NAME < <(basename -z -- "${BASH_SOURCE[0]}")
+
+declare -a ADDRS
+N=1
+LIMIT_PER=1
+PKG_ONLY=0
+CT_ONLY=0
+TEST_ONLY=0
+
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            usage
+            exit
+            ;;
+        -n|--number=*)
+            if [[ "$1" =~ ^.*=.*$ ]]; then
+                set -- "${1#*=}" "${@:2}"
+            else
+                shift
+            fi
+            if ! [[ "$1" =~ ^[0-9]+$ ]]; then
+                die "N argument must be an int (value: ${1@Q})" 1
+            fi
+            N="$1"
+            ;;
+        -l|--limit-per=*)
+            if [[ "$1" =~ ^.*=.*$ ]]; then
+                set -- "${1#*=}" "${@:2}"
+            else
+                shift
+            fi
+            if ! [[ "$1" =~ ^[0-9]+$ ]]; then
+                die "LIMIT_PER argument must be an int (value: ${1@Q})" 1
+            fi
+            LIMIT_PER="$1"
+            ;;
+        -e|--email=*)
+            if [[ "$1" =~ ^.*=.*$ ]]; then
+                set -- "${1#*=}" "${@:2}"
+            else
+                shift
+            fi
+            ADDRS+=( "$1" )
+            ;;
+        -p|--pkg-only)
+            PKG_ONLY=1
+            ;;
+        -c|--ct-only)
+            CT_ONLY=1
+            ;;
+        -t|--test-mode)
+            TEST_ONLY=1
+            ;;
+        *)
+            die "unrecognized argument ${1@Q}"$'\n'"$(usage)" 1
+            ;;
+    esac
+    shift
+done
+
+command -v pkgtst &> /dev/null || die 'pkgtst command not found, did you load the module?' 1
+
+parse_fails
+
+TOTAL=$((SIZE+CT_SIZE))
+
+if [[ "$TOTAL" -lt "$N" ]]; then
+    echo "Threshold not met (failures: $TOTAL)"
+    exit
+else
+    echo "Threshold met (failures: $TOTAL)"
+fi
+
+if [[ "${#ADDRS[@]}" -lt 1 ]]; then
+    echo "No specified recipients, no email will be sent"
+else
+    echo "Sending to recipients (ADDRS: ${ADDRS[@]})..."
+    subject="pkgtest-eval results -- package test fails: ${SIZE@Q}, custom test fails: ${CT_SIZE@Q}, total: ${TOTAL@Q}"
+    content="FAILED PACKAGE TEST RESULTS"$'\n'"$(pprint_fails)"$'\n\n'"FAILED CUSTOM TEST RESULTS"$'\n'"$(pprint_ct_fails)"
+    if ! [[ "$TEST_ONLY" = 1 ]]; then
+        printf '%s\n' "$content" | mailx -s "$subject" "${ADDRS[@]}"
+    else
+        printf 'to: %s\nsubject: %s\ncontent: %s\n' "${ADDRS[*]}" "$subject" "$content"
+    fi
+fi
+
+echo "Done"
