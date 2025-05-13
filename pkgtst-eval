@@ -187,11 +187,11 @@ function parse_fails() {
                     continue
                 fi
 
+                ((SIZE++))
                 for field in "${!FIELDS[@]}"; do
                     value="${!FIELDS[$field]}"
                     FAILS["$SIZE":"$field"]="$value"
                 done
-                ((SIZE++))
 
             fi
 
@@ -225,11 +225,11 @@ function parse_fails() {
                     continue
                 fi
 
+                ((CT_SIZE++))
                 for field in "${!CT_FIELDS[@]}"; do
                     value="${!CT_FIELDS[$field]}"
                     CT_FAILS["$CT_SIZE":"$field"]="$value"
                 done
-                ((CT_SIZE++))
 
             fi
 
