@@ -87,10 +87,3 @@ setup
 execute
 
 evaluate
-
-
-setup
-
-execute
-
-evaluate
