@@ -234,11 +234,13 @@ class CustomTest:
         if exit_code == 0:
             # SUCCESS :))
             passed = True
-            print(f"{test_name} -- PASS")
+            if do_wait:
+                print(f"{test_name} -- PASS")
         else:
             # FAIL :((
             passed = False
-            print(f"{test_name} -- FAIL")
+            if do_wait:
+                print(f"{test_name} -- FAIL")
 
         if do_wait:
             return passed
@@ -246,11 +248,15 @@ class CustomTest:
             
             # submit dependent job that waits for the current jobid, and runs the cmd:
             # pkgtst custom_test TESTNAME --write-result=JOBID
-            
+
+            test_id = test_name
+            if variant:
+                test_id += f":{variant}"
+
             sbatch_args = [ '--time=1' ]
             sbatch_args += [ f"--output={self.output_dir}/{test_name}_waiter_%A.txt" ]
             sbatch_args += [ f"--dependency=afterany:{shlex.quote(str(jobid))}" ]
-            sbatch_args += [ f"--wrap=pkgtst custom_test {shlex.quote(test_name)} --write-result --jobid={shlex.quote(str(jobid))}" ]
+            sbatch_args += [ f"--wrap=pkgtst custom_test {shlex.quote(test_id)} --write-result --jobid={shlex.quote(str(jobid))}" ]
 
             sbatch_args = [shlex.quote(i) for i in sbatch_args]
             
