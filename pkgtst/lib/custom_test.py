@@ -166,6 +166,8 @@ class CustomTest:
         # placeholder, to be populated if we see a slurm_feature_w_args variant
         script_args = []
 
+        ignore_results_dir = False
+
         # check if we have a slurm variant to use
         yaml_path = os.path.join(self.script_dir, test_name + ".yaml")
         if not os.path.exists(yaml_path):
@@ -176,12 +178,9 @@ class CustomTest:
                 settings = yaml.safe_load(fp)
 
             if self.results_dir is not None:
-                # check that this arg isn't configured to be ignored
-                if 'ignore_results_dir' not in settings or not settings['ignore_results_dir']:
-                    results_dir = os.path.join(self.results_dir, test_name)
-                    if not os.path.exists(results_dir):
-                        os.makedirs(results_dir)
-                    script_args += [ f"--results-dir={results_dir}" ]
+                # check if this arg is configured to be ignored
+                if 'ignore_results_dir' in settings and settings['ignore_results_dir']:
+                    ignore_results_dir = True
 
             if 'variants' in settings:
             
@@ -206,6 +205,15 @@ class CustomTest:
 
                         script_args += arg_lists[variant]
                         sbatch_args += sbatch_arg_lists[variant]
+
+        if self.results_dir is not None and not ignore_results_dir:
+            if variant is not None:
+                results_dir = os.path.join(self.results_dir, test_name, variant)
+            else:
+                results_dir = os.path.join(self.results_dir, test_name)
+            if not os.path.exists(results_dir):
+                os.makedirs(results_dir)
+            script_args += [ f"--results-dir={results_dir}" ]
 
         if variant is not None:
             sbatch_args += [f"--output={self.output_dir}/{test_name}.{variant}_%A.txt"]

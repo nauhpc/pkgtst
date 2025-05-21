@@ -52,8 +52,8 @@ function setup() {
         die 'could not determine the number of available GPUs' 1
     fi
 
-    cd -- "$(dirname -- "$RESULTS_DIR")" || {
-        die "failed to cd into $(dirname -- "$RESULTS_DIR")/.." 1
+    cd -- "$RESULTS_DIR" || {
+        die "failed to cd into ${RESULTS_DIR@Q}" 1
     }
 
     if ! [[ -d "gpu-burn" ]]; then
